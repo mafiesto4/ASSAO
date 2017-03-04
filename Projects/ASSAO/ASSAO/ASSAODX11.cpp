@@ -51,12 +51,7 @@
 #define SSAO_TEXTURE_SLOT2                          2
 #define SSAO_TEXTURE_SLOT3                          3
 #define SSAO_TEXTURE_SLOT4                          4
-#define SSAO_LOAD_COUNTER_UAV_SLOT                  4
 
-#define SSAO_MAX_TAPS                               32
-#define SSAO_MAX_REF_TAPS                           512
-#define SSAO_ADAPTIVE_TAP_BASE_COUNT                5
-#define SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT            (SSAO_MAX_TAPS-SSAO_ADAPTIVE_TAP_BASE_COUNT)
 #define SSAO_DEPTH_MIP_LEVELS                       4
 
 namespace
@@ -144,22 +139,13 @@ namespace
         float                   DepthPrecisionOffsetMod;
         float                   NegRecEffectRadius;                     // -1.0 / EffectRadius
         float                   LoadCounterAvgDiv;                      // 1.0 / ( halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeX * halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeY )
-        float                   AdaptiveSampleCountLimit;
+        float                   DetailAOStrength;
 
         float                   InvSharpness;
         int                     PassIndex;
-        vaVector2               QuarterResPixelSize;                    // used for importance map only
+        vaVector2               Dummy4;
 
         vaVector4               PatternRotScaleMatrices[5];
-
-        float                   Dummy1;
-        float                   Dumy2;
-        float                   DetailAOStrength;
-        float                   Dummy0;
-
-#if SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-        ASSAO_Float4x4          NormalsWorldToViewspaceMatrix;
-#endif
     };
 
     // Simplify texture creation and potential future porting
@@ -356,35 +342,21 @@ private:
     ID3D11PixelShader *                     m_pixelShaderPrepareDepthsHalf;
     ID3D11PixelShader *                     m_pixelShaderPrepareDepthsAndNormalsHalf;
     ID3D11PixelShader *                     m_pixelShaderPrepareDepthMip[SSAO_DEPTH_MIP_LEVELS - 1];
-    ID3D11PixelShader *                     m_pixelShaderGenerate[5];
+    ID3D11PixelShader *                     m_pixelShaderGenerate[4];
     ID3D11PixelShader *                     m_pixelShaderSmartBlur;
     ID3D11PixelShader *                     m_pixelShaderSmartBlurWide;
     ID3D11PixelShader *                     m_pixelShaderApply;
     ID3D11PixelShader *                     m_pixelShaderNonSmartBlur;
     ID3D11PixelShader *                     m_pixelShaderNonSmartApply;
     ID3D11PixelShader *                     m_pixelShaderNonSmartHalfApply;
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    ID3D11PixelShader *                     m_pixelShaderGenerateImportanceMap;
-    ID3D11PixelShader *                     m_pixelShaderPostprocessImportanceMapA;
-    ID3D11PixelShader *                     m_pixelShaderPostprocessImportanceMapB;
-#endif
 
     D3D11Texture2D                          m_halfDepths[4];
     D3D11Texture2D                          m_halfDepthsMipViews[4][SSAO_DEPTH_MIP_LEVELS];
-    //D3D11Texture2D                          m_edges;
     D3D11Texture2D                          m_pingPongHalfResultA;
     D3D11Texture2D                          m_pingPongHalfResultB;
     D3D11Texture2D                          m_finalResults;
     D3D11Texture2D                          m_finalResultsArrayViews[4];
     D3D11Texture2D                          m_normals;
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    // Only needed for quality level 3 (adaptive quality)
-    D3D11Texture2D                          m_importanceMap;
-    D3D11Texture2D                          m_importanceMapPong;
-    ID3D11Texture1D *                       m_loadCounter;
-    ID3D11ShaderResourceView *              m_loadCounterSRV;
-    ID3D11UnorderedAccessView *             m_loadCounterUAV;
-#endif
 
     bool                                    m_requiresClear;
 
@@ -411,7 +383,7 @@ private:
     void                                    UpdateConstants( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs, int pass );
     void                                    FullscreenPassDraw( ID3D11DeviceContext * context, ID3D11PixelShader * pixelShader, ID3D11BlendState * blendState = NULL, ID3D11DepthStencilState * depthStencilState = NULL, UINT stencilRef = 0 );
     void                                    PrepareDepths( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs );
-    void                                    GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs, bool adaptiveBasePass );
+    void                                    GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs );
 };
 
 
@@ -475,14 +447,6 @@ ASSAODX11::ASSAODX11( const ASSAO_CreateDescDX11 * createDesc )
     m_pixelShaderApply                              = NULL;
     m_pixelShaderNonSmartApply                      = NULL;
     m_pixelShaderNonSmartHalfApply                  = NULL;
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    m_pixelShaderGenerateImportanceMap              = NULL;
-    m_pixelShaderPostprocessImportanceMapA          = NULL;
-    m_pixelShaderPostprocessImportanceMapB          = NULL;
-    m_loadCounter                                   = NULL;
-    m_loadCounterSRV                                = NULL;
-    m_loadCounterUAV                                = NULL;
-#endif
 
     m_samplerStatePointClamp                        = NULL;
     m_samplerStateLinearClamp                       = NULL;
@@ -660,8 +624,6 @@ bool ASSAODX11::InitializeDX( const ASSAO_CreateDescDX11 * createDesc )
         D3D_SHADER_MACRO shaderMacros[] = { 
             { "SSAO_MAX_TAPS" ,                              SSA_STRINGIZIZER( SSAO_MAX_TAPS                              ) },
             { "SSAO_MAX_REF_TAPS" ,                          SSA_STRINGIZIZER( SSAO_MAX_REF_TAPS                          ) },
-            { "SSAO_ADAPTIVE_TAP_BASE_COUNT" ,               SSA_STRINGIZIZER( SSAO_ADAPTIVE_TAP_BASE_COUNT               ) },
-            { "SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT" ,           SSA_STRINGIZIZER( SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT           ) },
             { "SSAO_DEPTH_MIP_LEVELS" ,                      SSA_STRINGIZIZER( SSAO_DEPTH_MIP_LEVELS                         ) },
             
             { NULL, NULL }
@@ -719,13 +681,8 @@ bool ASSAODX11::InitializeDX( const ASSAO_CreateDescDX11 * createDesc )
             hr = CreatePixelShader( createDesc, shaderMacros, "PSGenerateQ2", "ps_5_0", shaderFlags, &m_pixelShaderGenerate[2] );
             if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
 
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
             hr = CreatePixelShader( createDesc, shaderMacros, "PSGenerateQ3", "ps_5_0", shaderFlags, &m_pixelShaderGenerate[3] );
             if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-            hr = CreatePixelShader( createDesc, shaderMacros, "PSGenerateQ3Base", "ps_5_0", shaderFlags, &m_pixelShaderGenerate[4] );
-            if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-#endif
 
             hr = CreatePixelShader( createDesc, shaderMacros, "PSSmartBlur", "ps_5_0", shaderFlags, &m_pixelShaderSmartBlur );
             if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
@@ -744,38 +701,9 @@ bool ASSAODX11::InitializeDX( const ASSAO_CreateDescDX11 * createDesc )
 
             hr = CreatePixelShader( createDesc, shaderMacros, "PSNonSmartHalfApply", "ps_5_0", shaderFlags, &m_pixelShaderNonSmartHalfApply );
             if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-            hr = CreatePixelShader( createDesc, shaderMacros, "PSGenerateImportanceMap", "ps_5_0", shaderFlags, &m_pixelShaderGenerateImportanceMap );
-            if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-            hr = CreatePixelShader( createDesc, shaderMacros, "PSPostprocessImportanceMapA", "ps_5_0", shaderFlags, &m_pixelShaderPostprocessImportanceMapA );
-            if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-            hr = CreatePixelShader( createDesc, shaderMacros, "PSPostprocessImportanceMapB", "ps_5_0", shaderFlags, &m_pixelShaderPostprocessImportanceMapB );
-            if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-#endif
         }
 
     }
-
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    // load counter stuff, only needed for adaptive quality (quality level 3)
-    {
-        CD3D11_TEXTURE1D_DESC desc( DXGI_FORMAT_R32_UINT, 1, 1, 1, D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS );
-
-        hr = m_device->CreateTexture1D( &desc, NULL, &m_loadCounter );
-        if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-        CD3D11_SHADER_RESOURCE_VIEW_DESC srvDesc( m_loadCounter, D3D11_SRV_DIMENSION_TEXTURE1D );
-        hr = m_device->CreateShaderResourceView( m_loadCounter, &srvDesc, &m_loadCounterSRV );
-        if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-
-        CD3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc( m_loadCounter, D3D11_UAV_DIMENSION_TEXTURE1D );
-        hr = m_device->CreateUnorderedAccessView( m_loadCounter, &uavDesc, &m_loadCounterUAV );
-        if( FAILED( hr ) ) { assert( false ); CleanupDX(); return false; }
-    }
-#endif
 
     return true;
 }
@@ -804,14 +732,6 @@ void ASSAODX11::CleanupDX( )
     SAFE_RELEASE( m_pixelShaderApply                            );
     SAFE_RELEASE( m_pixelShaderNonSmartApply                    );
     SAFE_RELEASE( m_pixelShaderNonSmartHalfApply                );
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    SAFE_RELEASE( m_pixelShaderGenerateImportanceMap            );
-    SAFE_RELEASE( m_pixelShaderPostprocessImportanceMapA        );
-    SAFE_RELEASE( m_pixelShaderPostprocessImportanceMapB        );
-    SAFE_RELEASE( m_loadCounter                                 );
-    SAFE_RELEASE( m_loadCounterSRV                              );
-    SAFE_RELEASE( m_loadCounterUAV                              );
-#endif
 
     SAFE_RELEASE( m_device );
 
@@ -941,7 +861,7 @@ void           ASSAODX11::PrepareDepths( const ASSAO_Settings & settings, const 
     }
 }
 
-void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs, bool adaptiveBasePass )
+void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs)
 {
     ID3D11ShaderResourceView * normalmapSRV = (inputs->NormalSRV==NULL)?(m_normals.SRV):(inputs->NormalSRV);
 
@@ -952,11 +872,6 @@ void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_Input
         CD3D11_RECT rect = CD3D11_RECT( m_halfResOutScissorRect.x, m_halfResOutScissorRect.y, m_halfResOutScissorRect.z, m_halfResOutScissorRect.w );
         dx11Context->RSSetViewports( 1, &viewport );
         dx11Context->RSSetScissorRects( 1, &rect );
-    }
-
-    if( adaptiveBasePass )
-    {
-        assert( settings.QualityLevel == 3 );
     }
 
     int passCount = 4;
@@ -973,11 +888,7 @@ void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_Input
 
         if( settings.QualityLevel == 3 )
         {
-            // if adaptive, at least one blur pass needed as the first pass needs to read the final texture results - kind of awkward
-            if( adaptiveBasePass )
-                blurPasses = 0;
-            else
-                blurPasses = Max( 1, blurPasses );
+        	blurPasses = Max( 1, blurPasses );
         } 
         else if( settings.QualityLevel == 0 )
         {
@@ -1006,17 +917,9 @@ void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_Input
             dx11Context->OMSetRenderTargets( _countof( rts ), rts, NULL );
 
             ID3D11ShaderResourceView * SRVs[] = { m_halfDepths[pass].SRV, normalmapSRV, NULL, NULL, NULL }; // m_loadCounterSRV used only for quality level 3
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-            if( !adaptiveBasePass && (settings.QualityLevel == 3) )
-            {
-                SRVs[2] = m_loadCounterSRV;
-                SRVs[3] = m_importanceMap.SRV;
-                SRVs[4] = m_finalResults.SRV;
-            }
-#endif
             dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT0, 5, SRVs );
 
-            FullscreenPassDraw( dx11Context, m_pixelShaderGenerate[(!adaptiveBasePass)?(settings.QualityLevel):(4)] );
+            FullscreenPassDraw( dx11Context, m_pixelShaderGenerate[settings.QualityLevel]);
 
             // remove textures from slots 0, 1, 2, 3 to avoid API complaints
             dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT0, 5, zeroSRVs );
@@ -1078,13 +981,6 @@ void           ASSAODX11::Draw( const ASSAO_Settings & settings, const ASSAO_Inp
     const ASSAO_InputsDX11 * inputs = static_cast<const ASSAO_InputsDX11 *>( _inputs );
 
     assert( settings.QualityLevel >= 0 && settings.QualityLevel < 4 );
-#ifndef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    if( settings.QualityLevel == 3 )
-    {
-        assert( false );
-        return;
-    }
-#endif
 
     UpdateTextures( inputs );
 
@@ -1111,10 +1007,6 @@ void           ASSAODX11::Draw( const ASSAO_Settings & settings, const ASSAO_Inp
             dx11Context->ClearRenderTargetView( m_finalResultsArrayViews[2].RTV, fourOnes );
             dx11Context->ClearRenderTargetView( m_finalResultsArrayViews[3].RTV, fourOnes );
             if( m_normals.RTV != NULL ) dx11Context->ClearRenderTargetView( m_normals.RTV, fourZeroes );
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-            dx11Context->ClearRenderTargetView( m_importanceMap.RTV, fourZeroes );
-            dx11Context->ClearRenderTargetView( m_importanceMapPong.RTV, fourZeroes );
-#endif
 
             m_requiresClear = false;
         }
@@ -1135,50 +1027,8 @@ void           ASSAODX11::Draw( const ASSAO_Settings & settings, const ASSAO_Inp
         // Generate depths
         PrepareDepths( settings, inputs );
 
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-        // for adaptive quality, importance map pass
-        if( settings.QualityLevel == 3 )
-        {
-            // Generate simple quality SSAO
-            {
-                GenerateSSAO( settings, inputs, true );
-            }
-
-            // Generate importance map
-            {
-                CD3D11_VIEWPORT viewport = CD3D11_VIEWPORT( 0.0f, 0.0f, (float)m_quarterSize.x, (float)m_quarterSize.y );
-                CD3D11_RECT rect = CD3D11_RECT( 0, 0, m_quarterSize.x, m_quarterSize.y );
-                dx11Context->RSSetViewports( 1, &viewport );
-                dx11Context->RSSetScissorRects( 1, &rect );
-
-                ID3D11ShaderResourceView * zeroSRVs[] = { NULL, NULL, NULL, NULL, NULL };
-
-                // drawing into importanceMap
-                dx11Context->OMSetRenderTargets( 1, &m_importanceMap.RTV, NULL );
-
-                // select 4 deinterleaved AO textures (texture array)
-                dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT4, 1, &m_finalResults.SRV );
-                FullscreenPassDraw( dx11Context, m_pixelShaderGenerateImportanceMap, m_blendStateOpaque );
-            
-                // postprocess A
-                dx11Context->OMSetRenderTargets( 1, &m_importanceMapPong.RTV, NULL );
-                dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT3, 1, &m_importanceMap.SRV );
-                FullscreenPassDraw( dx11Context, m_pixelShaderPostprocessImportanceMapA, m_blendStateOpaque );
-                dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT3, 1, zeroSRVs );
-
-                // postprocess B
-                UINT fourZeroes[4] = { 0, 0, 0, 0 };
-                dx11Context->ClearUnorderedAccessViewUint( m_loadCounterUAV, fourZeroes );
-                dx11Context->OMSetRenderTargetsAndUnorderedAccessViews( 1, &m_importanceMap.RTV, NULL, SSAO_LOAD_COUNTER_UAV_SLOT, 1, &m_loadCounterUAV, NULL );
-                // select previous pass input importance map
-                dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT3, 1, &m_importanceMapPong.SRV );
-                FullscreenPassDraw( dx11Context, m_pixelShaderPostprocessImportanceMapB, m_blendStateOpaque );
-                dx11Context->PSSetShaderResources( SSAO_TEXTURE_SLOT3, 1, zeroSRVs );
-            }
-        }
-#endif
         // Generate SSAO
-        GenerateSSAO( settings, inputs, false );
+        GenerateSSAO( settings, inputs);
     	
     	// restore previous RTs
     	d3d11StatesBackup.RestoreRTs( );
@@ -1325,15 +1175,10 @@ void ASSAODX11::UpdateTextures( const ASSAO_InputsDX11 * inputs )
             for( int j = 0; j < m_depthMipLevels; j++ )
                 m_halfDepthsMipViews[i][j].ReCreateMIPViewIfNeeded( m_device, m_halfDepths[i], j );
         }
-
     }
     m_pingPongHalfResultA.ReCreateIfNeeded( m_device, m_halfSize, m_formats.AOResult, totalSizeInMB, 1, 1, false );
     m_pingPongHalfResultB.ReCreateIfNeeded( m_device, m_halfSize, m_formats.AOResult, totalSizeInMB, 1, 1, false );
     m_finalResults.ReCreateIfNeeded( m_device, m_halfSize, m_formats.AOResult, totalSizeInMB, 1, 4, false );
-#ifdef INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-    m_importanceMap.ReCreateIfNeeded( m_device, m_quarterSize, m_formats.ImportanceMap, totalSizeInMB, 1, 1, false );
-    m_importanceMapPong.ReCreateIfNeeded( m_device, m_quarterSize, m_formats.ImportanceMap, totalSizeInMB, 1, 1, false );
-#endif
     for( int i = 0; i < 4; i++ )
         m_finalResultsArrayViews[i].ReCreateArrayViewIfNeeded( m_device, m_finalResults, i );
 
@@ -1420,8 +1265,6 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
 
         consts.EffectSamplingRadiusNearLimitRec = 1.0f / effectSamplingRadiusNearLimit;
 
-        consts.AdaptiveSampleCountLimit         = settings.AdaptiveQualityLimit; 
-
         consts.NegRecEffectRadius               = -1.0f / consts.EffectRadius;
 
         consts.PerPassFullResCoordOffset        = vaVector2i( pass % 2, pass / 2 );
@@ -1429,7 +1272,6 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
 
         consts.InvSharpness                     = Clamp( 1.0f - settings.Sharpness, 0.0f, 1.0f );
         consts.PassIndex                        = pass;
-        consts.QuarterResPixelSize              = vaVector2( 1.0f / (float)m_quarterSize.x, 1.0f / (float)m_quarterSize.y );
 
         const int subPassCount = 5;
         for( int subPass = 0; subPass < subPassCount; subPass++ )

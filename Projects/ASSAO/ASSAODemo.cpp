@@ -1079,31 +1079,15 @@ void ASSAODemo::OnRender( )
                 // extension for "Lowest"
                 int qualityLevelUI = ssaoSettings.QualityLevel+1;
                 if( ssaoSettings.SkipHalfPixelsOnLowQualityLevel ) qualityLevelUI--;
-                ImGui::Combo( "Quality", &qualityLevelUI, "Quality: LOWEST\0Quality: LOW\0Quality: MEDIUM\0Quality: HIGH\0Quality: HIGHEST (adaptive)\0\0" ); // Combo using values packed in a single constant string (for really quick combo)
+                ImGui::Combo( "Quality", &qualityLevelUI, "Quality: LOWEST\0Quality: LOW\0Quality: MEDIUM\0Quality: HIGH\0Quality: HIGHEST\0\0" ); // Combo using values packed in a single constant string (for really quick combo)
                 ImGui::PopItemWidth( );
                 // extension for "Lowest"
                 ssaoSettings.QualityLevel = vaMath::Clamp( qualityLevelUI-1, 0, 4 );
                 ssaoSettings.SkipHalfPixelsOnLowQualityLevel = qualityLevelUI == 0;
 
                 comboSizeY = ImGui::GetCursorPosY() - comboSizeY;
-              
-                //if( ImGui::Button( qualityText.c_str(), ImVec2( ImGui::GetContentRegionAvailWidth(), 0.0f ) ) )
-                //    ssaoSettings.QualityLevel = (ssaoSettings.QualityLevel + 1) % 4;
-
-                if( ssaoSettings.QualityLevel == 3 )
-                {
-                    ImGui::PushItemWidth( ImGui::GetContentRegionAvailWidth() );
-
-                    ImGui::SliderFloat( "AdaptiveLimit", &ssaoSettings.AdaptiveQualityLimit, 0.0f, 1.0f, "Adaptive target: %.2f" );
-                    if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Used to limit the max cost regardless of scene contents" );
-
-                    ImGui::PopItemWidth( );
-                }
-                else
-                {
-                    //m_SSAOEffect_DevelopmentVersion->DebugShowSampleHeatmap() = false;
-                    ImGui::NewLine();
-                }
+            	
+            	ImGui::NewLine();
 
                 bool showChangeScene = false;
 

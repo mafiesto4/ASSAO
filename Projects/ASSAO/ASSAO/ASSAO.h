@@ -25,9 +25,6 @@ struct ID3D11RenderTargetView;
 
 #pragma pack( push, 8 ) // Make sure we have consistent structure packings
 
-// Disabling adaptive quality uses a tiny bit less memory (21.75Mb instead of 22Mb at 1920x1080) and makes it easier to port
-#define INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
-
 struct ASSAO_Float4x4
 {
     union
@@ -92,8 +89,8 @@ struct ASSAO_Settings
     float       HorizonAngleThreshold;              // [0.0, 0.2] Limits self-shadowing (makes the sampling area less of a hemisphere, more of a spherical cone, to avoid self-shadowing and various artifacts due to low tessellation and depth buffer imprecision, etc.)
     float       FadeOutFrom;                        // [0.0,  ~ ] Distance to start start fading out the effect.
     float       FadeOutTo;                          // [0.0,  ~ ] Distance at which the effect is faded out.
-    int         QualityLevel;                       // [  0,    ] Effect quality; 0 - low, 1 - medium, 2 - high, 3 - very high / adaptive; each quality level is roughly 2x more costly than the previous, except the q3 which is variable but, in general, above q2.
-    float       AdaptiveQualityLimit;               // [0.0, 1.0] (only for Quality Level 3)
+    int         QualityLevel;                       // [  0,    ] Effect quality; 0 - low, 1 - medium, 2 - high, 3 - very high; each quality level is roughly 2x more costly than the previous, except the q3 which is variable but, in general, above q2.
+    float       Dummy2;
     int         BlurPassCount;                      // [  0,   6] Number of edge-sensitive smart blur passes to apply. Quality 0 is an exception with only one 'dumb' blur pass used.
     float       Sharpness;                          // [0.0, 1.0] (How much to bleed over edges; 1: not at all, 0.5: half-half; 0.0: completely ignore edges)
     float       Dummy0;
@@ -110,7 +107,6 @@ struct ASSAO_Settings
         HorizonAngleThreshold               = 0.06f;
         FadeOutFrom                         = 50.0f;
         FadeOutTo                           = 300.0f;
-        AdaptiveQualityLimit                = 0.45f;
         QualityLevel                        = 2;
         BlurPassCount                       = 2;
         Sharpness                           = 0.98f;

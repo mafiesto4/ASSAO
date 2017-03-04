@@ -30,11 +30,9 @@ static const float4 g_samplePatternMain[INTELSSAO_MAIN_DISK_SAMPLE_COUNT] =
     -0.15064627, -0.14949332,  0.600000, -1.896062,     0.53180975, -0.35210401,  0.600000, -0.758838,     0.41487166,  0.81442589,  0.600000, -0.505648,    -0.24106961, -0.32721516,  0.600000, -1.665244
 };
 
-// these values can be changed (up to SSAO_MAX_TAPS) with no changes required elsewhere; values for 4th and 5th preset are ignored but array needed to avoid compilation errors
+// these values can be changed with no changes required elsewhere;
 // the actual number of texture samples is two times this value (each "tap" has two symmetrical depth texture samples)
-static const uint g_numTaps[5]   = { 3, 5, 12, 0, 0 };
-// an example of higher quality low/medium/high settings
-// static const uint g_numTaps[5]   = { 4, 9, 16, 0, 0 };
+static const uint g_numTaps[4]   = { 3, 5, 8, 12 };
 
 // ** WARNING ** if changing anything here, please remember to update the corresponding C++ code!
 struct ASSAOConstants
@@ -62,28 +60,23 @@ struct ASSAOConstants
     float                   EffectFadeOutMul;                       // effect fade out from distance (ex. 25)
     float                   EffectFadeOutAdd;                       // effect fade out to distance   (ex. 100)
     float                   EffectHorizonAngleThreshold;            // limit errors on slopes and caused by insufficient geometry tessellation (0.05 to 0.5)
-    float                   EffectSamplingRadiusNearLimitRec;          // if viewspace pixel closer than this, don't enlarge shadow sampling radius anymore (makes no sense to grow beyond some distance, not enough samples to cover everything, so just limit the shadow growth; could be SSAOSettingsFadeOutFrom * 0.1 or less)
+    float                   EffectSamplingRadiusNearLimitRec;       // if viewspace pixel closer than this, don't enlarge shadow sampling radius anymore (makes no sense to grow beyond some distance, not enough samples to cover everything, so just limit the shadow growth; could be SSAOSettingsFadeOutFrom * 0.1 or less)
 
     float                   DepthPrecisionOffsetMod;
     float                   NegRecEffectRadius;                     // -1.0 / EffectRadius
     float                   LoadCounterAvgDiv;                      // 1.0 / ( halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeX * halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeY )
-    float                   AdaptiveSampleCountLimit;
+    float                   DetailAOStrength;
 
     float                   InvSharpness;
     int                     PassIndex;
-    float2                  QuarterResPixelSize;                    // used for importance map only
+    float2                  Dummy4;
 
     float4                  PatternRotScaleMatrices[5];
-
-    float                   Dummy1;
-    float                   Dummy2;
-    float                   DetailAOStrength;
-    float                   Dummy0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Optional parts that can be enabled for a required quality preset level and above (0 == Low, 1 == Medium, 2 == High, 3 == Highest/Adaptive, 4 == reference/unused )
+// Optional parts that can be enabled for a required quality preset level and above (0 == Low, 1 == Medium, 2 == High, 3 == Highest)
 // Each has its own cost. To disable just set to 5 or above.
 //
 // (experimental) tilts the disk (although only half of the samples!) towards surface normal; this helps with effect uniformity between objects but reduces effect distance and has other side-effects
@@ -126,17 +119,11 @@ Texture2D<float>    g_ViewspaceDepthSource1     : register( t1 );   // correspon
 Texture2D<float>    g_ViewspaceDepthSource2     : register( t2 );   // corresponds to SSAO_TEXTURE_SLOT2
 Texture2D<float>    g_ViewspaceDepthSource3     : register( t3 );   // corresponds to SSAO_TEXTURE_SLOT3
 
-Texture2D<float>    g_ImportanceMap             : register( t3 );   // corresponds to SSAO_TEXTURE_SLOT3
-
-Texture1D<uint>     g_LoadCounter               : register( t2 );   // corresponds to SSAO_TEXTURE_SLOT2
-
 Texture2D           g_BlurInput                 : register( t2 );   // corresponds to SSAO_TEXTURE_SLOT2
 
 Texture2DArray      g_FinalSSAO                 : register( t4 );   // corresponds to SSAO_TEXTURE_SLOT4
 
 RWTexture2D<float4> g_NormalsOutputUAV          : register( u4 );   // corresponds to SSAO_NORMALMAP_OUT_UAV_SLOT
-RWTexture1D<uint>   g_LoadCounterOutputUAV      : register( u4 );   // corresponds to SSAO_LOAD_COUNTER_UAV_SLOT 
-
 
 // packing/unpacking for edges; 2 bits per edge mean 4 gradient values (0, 0.33, 0.66, 1) for smoother transitions!
 float PackEdges( float4 edgesLRTB )
@@ -609,12 +596,12 @@ void SSAOTap( const int qualityLevel, inout float obscuranceSum, inout float wei
 }
 
 // this function is designed to only work with half/half depth at the moment - there's a couple of hardcoded paths that expect pixel/texel size, so it will not work for full res
-void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, out float outWeight, const float2 SVPos/*, const float2 normalizedScreenPos*/, uniform int qualityLevel, bool adaptiveBase )
+void GenerateSSAOShadowsInternal(out float outShadowTerm, out float4 outEdges, out float outWeight, const float2 SVPos/*, const float2 normalizedScreenPos*/, uniform int qualityLevel)
 {
     float2 SVPosRounded = trunc( SVPos );
     uint2 SVPosui = uint2( SVPosRounded ); //same as uint2( SVPos )
 
-    const int numberOfTaps = (adaptiveBase)?(SSAO_ADAPTIVE_TAP_BASE_COUNT) : ( g_numTaps[qualityLevel] );
+    const int numberOfTaps = g_numTaps[qualityLevel];
     float pixZ, pixLZ, pixTZ, pixRZ, pixBZ;
 
     float4 valuesUL     = g_ViewspaceDepthSource.GatherRed( g_PointMirrorSampler, SVPosRounded * g_ASSAOConsts.HalfViewportPixelSize );
@@ -649,7 +636,7 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
     float2x2 rotScale;
     {
         // reduce effect radius near the screen edges slightly; ideally, one would render a larger depth buffer (5% on each side) instead
-        if( !adaptiveBase && (qualityLevel >= SSAO_REDUCE_RADIUS_NEAR_SCREEN_BORDER_ENABLE_AT_QUALITY_PRESET) )
+        if(qualityLevel >= SSAO_REDUCE_RADIUS_NEAR_SCREEN_BORDER_ENABLE_AT_QUALITY_PRESET)
         {
             float nearScreenBorder = min( min( normalizedScreenPos.x, 1.0 - normalizedScreenPos.x ), min( normalizedScreenPos.y, 1.0 - normalizedScreenPos.y ) );
             nearScreenBorder = saturate( 10.0 * nearScreenBorder + 0.6 );
@@ -672,13 +659,13 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
     // Move center pixel slightly towards camera to avoid imprecision artifacts due to using of 16bit depth buffer; a lot smaller offsets needed when using 32bit floats
     pixCenterPos *= g_ASSAOConsts.DepthPrecisionOffsetMod;
 
-    if( !adaptiveBase && (qualityLevel >= SSAO_DEPTH_BASED_EDGES_ENABLE_AT_QUALITY_PRESET) )
+    if(qualityLevel >= SSAO_DEPTH_BASED_EDGES_ENABLE_AT_QUALITY_PRESET)
     {
         edgesLRTB = CalculateEdges( pixZ, pixLZ, pixRZ, pixTZ, pixBZ );
     }
 
     // adds a more high definition sharp effect, which gets blurred out (reuses left/right/top/bottom samples that we used for edge detection)
-    if( !adaptiveBase && (qualityLevel >= SSAO_DETAIL_AO_ENABLE_AT_QUALITY_PRESET) )
+    if(qualityLevel >= SSAO_DETAIL_AO_ENABLE_AT_QUALITY_PRESET)
     {
         // disable in case of quality level 4 (reference)
         if( qualityLevel != 4 )
@@ -704,7 +691,7 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
     }
 
     // Sharp normals also create edges - but this adds to the cost as well
-    if( !adaptiveBase && (qualityLevel >= SSAO_NORMAL_BASED_EDGES_ENABLE_AT_QUALITY_PRESET ) )
+    if(qualityLevel >= SSAO_NORMAL_BASED_EDGES_ENABLE_AT_QUALITY_PRESET )
     {
         float3 neighbourNormalL  = LoadNormal( fullResCoord, int2( -2,  0 ) );
         float3 neighbourNormalR  = LoadNormal( fullResCoord, int2(  2,  0 ) );
@@ -732,8 +719,6 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
         edgesLRTB *= normalEdgesLRTB;
     }
 
-
-
     const float globalMipOffset     = SSAO_DEPTH_MIPS_GLOBAL_OFFSET;
     float mipOffset = ( qualityLevel < SSAO_DEPTH_MIPS_ENABLE_AT_QUALITY_PRESET ) ? ( 0 ) : ( log2( pixLookupRadiusMod ) + globalMipOffset );
 
@@ -746,66 +731,10 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
 
     const float3 negViewspaceDir = -normalize( pixCenterPos );
 
-    // standard, non-adaptive approach
-    if( (qualityLevel != 3) || adaptiveBase )
+    // [unroll] // <- doesn't seem to help on any platform, although the compilers seem to unroll anyway if const number of tap used!
+    for( int i = 0; i < numberOfTaps; i++ )
     {
-        // [unroll] // <- doesn't seem to help on any platform, although the compilers seem to unroll anyway if const number of tap used!
-        for( int i = 0; i < numberOfTaps; i++ )
-        {
-            SSAOTap( qualityLevel, obscuranceSum, weightSum, i, rotScale, pixCenterPos, negViewspaceDir, pixelNormal, normalizedScreenPos, mipOffset, falloffCalcMulSq, 1.0, normXY, normXYLength );
-        }
-    }
-    else // if( qualityLevel == 3 ) adaptive approach
-    {
-        // add new ones if needed
-        float2 fullResUV = normalizedScreenPos + g_ASSAOConsts.PerPassFullResUVOffset.xy;
-        float importance = g_ImportanceMap.SampleLevel( g_LinearClampSampler, fullResUV, 0.0 ).x;
-
-        // this is to normalize SSAO_DETAIL_AO_AMOUNT across all pixel regardless of importance
-        obscuranceSum *= (SSAO_ADAPTIVE_TAP_BASE_COUNT / (float)SSAO_MAX_TAPS) + (importance * SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT / (float)SSAO_MAX_TAPS);
-
-        // load existing base values
-        float2 baseValues = g_FinalSSAO.Load( int4( SVPosui, g_ASSAOConsts.PassIndex, 0 ) ).xy;
-        weightSum += baseValues.y * (float)(SSAO_ADAPTIVE_TAP_BASE_COUNT * 4.0);
-        obscuranceSum += (baseValues.x) * weightSum;
-        
-        // increase importance around edges
-        float edgeCount = dot( 1.0-edgesLRTB, float4( 1.0, 1.0, 1.0, 1.0 ) );
-        //importance += edgeCount / (float)SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT;
-
-        float avgTotalImportance = (float)g_LoadCounter[0] * g_ASSAOConsts.LoadCounterAvgDiv;
-
-        float importanceLimiter = saturate( g_ASSAOConsts.AdaptiveSampleCountLimit / avgTotalImportance );
-        importance *= importanceLimiter;
-
-        float additionalSampleCountFlt = SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT * importance;
-
-        const float blendRange = 3.0; // use 1 to just blend the last one; use larger number to blend over more for a more smooth transition
-        const float blendRangeInv = 1.0 / blendRange;
-
-        additionalSampleCountFlt += 0.5;
-        uint additionalSamples   = uint( additionalSampleCountFlt );
-        uint additionalSamplesTo = min( SSAO_MAX_TAPS, additionalSamples + SSAO_ADAPTIVE_TAP_BASE_COUNT );
-
-        // additional manual unroll doesn't help unfortunately
-        [loop]
-        for( uint i = SSAO_ADAPTIVE_TAP_BASE_COUNT; i < additionalSamplesTo; i++ )
-        {
-            additionalSampleCountFlt -= 1.0f;
-            float weightMod = saturate(additionalSampleCountFlt * blendRangeInv); // slowly blend in the last few samples
-            SSAOTap( qualityLevel, obscuranceSum, weightSum, i, rotScale, pixCenterPos, negViewspaceDir, pixelNormal, normalizedScreenPos, mipOffset, falloffCalcMulSq, weightMod, normXY, normXYLength );
-        }
-    }
-
-    // early out for adaptive base - just output weight (used for the next pass)
-    if( adaptiveBase )
-    {
-        float obscurance = obscuranceSum / weightSum;
-
-        outShadowTerm   = obscurance;
-        outEdges        = 0;
-        outWeight       = weightSum;
-        return;
+        SSAOTap( qualityLevel, obscuranceSum, weightSum, i, rotScale, pixCenterPos, negViewspaceDir, pixelNormal, normalizedScreenPos, mipOffset, falloffCalcMulSq, 1.0, normXY, normXYLength );
     }
 
     // calculate weighted average
@@ -815,7 +744,7 @@ void GenerateSSAOShadowsInternal( out float outShadowTerm, out float4 outEdges, 
     float fadeOut = saturate( pixCenterPos.z * g_ASSAOConsts.EffectFadeOutMul + g_ASSAOConsts.EffectFadeOutAdd );
   
     // Reduce the SSAO shadowing if we're on the edge to remove artifacts on edges (we don't care for the lower quality one)
-    if( !adaptiveBase && (qualityLevel >= SSAO_DEPTH_BASED_EDGES_ENABLE_AT_QUALITY_PRESET) )
+    if(qualityLevel >= SSAO_DEPTH_BASED_EDGES_ENABLE_AT_QUALITY_PRESET)
     {
         // float edgeCount = dot( 1.0-edgesLRTB, float4( 1.0, 1.0, 1.0, 1.0 ) );
 
@@ -859,7 +788,7 @@ void PSGenerateQ0( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/
     float   outShadowTerm;
     float   outWeight;
     float4  outEdges;
-    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 0, false );
+    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 0);
     out0.x = outShadowTerm;
     out0.y = PackEdges( float4( 1, 1, 1, 1 ) ); // no edges in low quality
 }
@@ -869,7 +798,7 @@ void PSGenerateQ1( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/
     float   outShadowTerm;
     float   outWeight;
     float4  outEdges;
-    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 1, false );
+    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 1);
     out0.x = outShadowTerm;
     out0.y = PackEdges( outEdges );
 }
@@ -879,19 +808,9 @@ void PSGenerateQ2( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/
     float   outShadowTerm;
     float   outWeight;
     float4  outEdges;
-    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 2, false );
+    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 2);
     out0.x = outShadowTerm;
     out0.y = PackEdges( outEdges );
-}
-
-void PSGenerateQ3Base( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/, out float2 out0 : SV_Target0 )
-{
-    float   outShadowTerm;
-    float   outWeight;
-    float4  outEdges;
-    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 3, true );
-    out0.x = outShadowTerm;
-    out0.y = outWeight / ((float)SSAO_ADAPTIVE_TAP_BASE_COUNT * 4.0); //0.0; //frac(outWeight / 6.0);// / (float)(SSAO_MAX_TAPS * 4.0);
 }
 
 void PSGenerateQ3( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/, out float2 out0 : SV_Target0 )
@@ -899,7 +818,7 @@ void PSGenerateQ3( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCOORD0*/
     float   outShadowTerm;
     float   outWeight;
     float4  outEdges;
-    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 3, false);
+    GenerateSSAOShadowsInternal( outShadowTerm, outEdges, outWeight, inPos.xy/*, inUV*/, 3);
     out0.x = outShadowTerm;
     out0.y = PackEdges( outEdges );
 }
@@ -1081,94 +1000,4 @@ float4 PSNonSmartHalfApply( in float4 inPos : SV_POSITION, in float2 inUV : TEXC
     float d = g_FinalSSAO.SampleLevel( g_LinearClampSampler, float3( inUV.xy, 3 ), 0.0 ).x;
     float avg = (a+d) * 0.5;
     return float4( avg.xxx, 1.0 );
-}
-
-// Shaders below only needed for adaptive quality level
-
-float PSGenerateImportanceMap( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
-{
-    uint2 basePos = ((uint2)inPos.xy) * 2;
-
-    float2 baseUV = (float2(basePos) + float2( 0.5, 0.5 ) ) * g_ASSAOConsts.HalfViewportPixelSize;
-    float2 gatherUV = (float2(basePos) + float2( 1.0, 1.0 ) ) * g_ASSAOConsts.HalfViewportPixelSize;
-
-    float avg = 0.0;
-    float minV = 1.0;
-    float maxV = 0.0;
-    for( int i = 0; i < 4; i++ )
-    {
-        float4 vals = g_FinalSSAO.GatherRed( g_PointClampSampler, float3( gatherUV, i ) );
-
-        // apply the same modifications that would have been applied in the main shader
-        vals = g_ASSAOConsts.EffectShadowStrength * vals;
-
-        vals = 1-vals;
-
-        vals = pow( saturate( vals ), g_ASSAOConsts.EffectShadowPow );
-
-        avg += dot( float4( vals.x, vals.y, vals.z, vals.w ), float4( 1.0 / 16.0, 1.0 / 16.0, 1.0 / 16.0, 1.0 / 16.0 ) );
-
-        maxV = max( maxV, max( max( vals.x, vals.y ), max( vals.z, vals.w ) ) );
-        minV = min( minV, min( min( vals.x, vals.y ), min( vals.z, vals.w ) ) );
-    }
-
-    float minMaxDiff = maxV - minV;
-
-    //return pow( saturate( minMaxDiff * 1.2 + (1.0-avg) * 0.3 ), 0.8 );
-    return pow( saturate( minMaxDiff * 2.0 ), 0.8 );
-}
-
-static const float cSmoothenImportance = 1.0;
-
-float PSPostprocessImportanceMapA( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
-{
-    uint2 pos = ((uint2)inPos.xy);
-
-    float centre = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV, 0.0 ).x;
-    //return centre;
-
-    float2 halfPixel = g_ASSAOConsts.QuarterResPixelSize * 0.5f;
-
-    float4 vals;
-    vals.x = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( -halfPixel.x * 3, -halfPixel.y ), 0.0 ).x;
-    vals.y = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( +halfPixel.x, -halfPixel.y * 3 ), 0.0 ).x;
-    vals.z = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( +halfPixel.x * 3, +halfPixel.y ), 0.0 ).x;
-    vals.w = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( -halfPixel.x, +halfPixel.y * 3 ), 0.0 ).x;
-
-    float avgVal = dot( vals, float4( 0.25, 0.25, 0.25, 0.25 ) );
-    vals.xy = max( vals.xy, vals.zw );
-    float maxVal = max( centre, max( vals.x, vals.y ) );
-
-    return lerp( maxVal, avgVal, cSmoothenImportance );
-}
-
-float PSPostprocessImportanceMapB( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
-{
-    uint2 pos = ((uint2)inPos.xy);
-
-    float centre = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV, 0.0 ).x;
-    //return centre;
-
-    float2 halfPixel = g_ASSAOConsts.QuarterResPixelSize * 0.5f;
-
-    float4 vals;
-    vals.x = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( -halfPixel.x, -halfPixel.y * 3 ), 0.0 ).x;
-    vals.y = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( +halfPixel.x * 3, -halfPixel.y ), 0.0 ).x;
-    vals.z = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( +halfPixel.x, +halfPixel.y * 3 ), 0.0 ).x;
-    vals.w = g_ImportanceMap.SampleLevel( g_LinearClampSampler, inUV + float2( -halfPixel.x * 3, +halfPixel.y ), 0.0 ).x;
-
-    float avgVal = dot( vals, float4( 0.25, 0.25, 0.25, 0.25 ) );
-    vals.xy = max( vals.xy, vals.zw );
-    float maxVal = max( centre, max( vals.x, vals.y ) );
-
-    float retVal = lerp( maxVal, avgVal, cSmoothenImportance );
-
-    // sum the average; to avoid overflowing we assume max AO resolution is not bigger than 16384x16384; so quarter res (used here) will be 4096x4096, which leaves us with 8 bits per pixel 
-    uint sum = (uint)(saturate(retVal) * 255.0 + 0.5);
-    
-    // save every 9th to avoid InterlockedAdd congestion - since we're blurring, this is good enough; compensated by multiplying LoadCounterAvgDiv by 9
-    if( ((pos.x % 3) + (pos.y % 3)) == 0  )
-        InterlockedAdd( g_LoadCounterOutputUAV[0], sum );
-
-    return retVal;
 }
