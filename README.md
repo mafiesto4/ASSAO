@@ -10,3 +10,7 @@ All files required to port the effect to your codebase are in https://github.com
 For details please go to: https://software.intel.com/en-us/articles/adaptive-screen-space-ambient-occlusion
 
 For any questions please feel free to contact the author at filip.strugar@intel.com
+
+# Note
+
+This demo has been adapted for Flax Engine.
