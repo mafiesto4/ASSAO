@@ -335,15 +335,11 @@ class ASSAODX11 : public ASSAO_Effect
 	{
 		DXGI_FORMAT DepthBufferViewspaceLinear;
 		DXGI_FORMAT AOResult;
-		DXGI_FORMAT Normals;
-		DXGI_FORMAT ImportanceMap;
 
 		BufferFormats()
 		{
 			DepthBufferViewspaceLinear = DXGI_FORMAT_R16_FLOAT; // increase this to DXGI_FORMAT_R32_FLOAT if using very low FOVs (for a scope effect) or similar, or in case you suspect artifacts caused by lack of precision; performance will degrade
-			Normals = DXGI_FORMAT_R8G8B8A8_UNORM;
 			AOResult = DXGI_FORMAT_R8G8_UNORM;
-			ImportanceMap = DXGI_FORMAT_R8_UNORM;
 		}
 	};
 
@@ -356,8 +352,6 @@ private:
 	vaVector2i m_quarterSize;
 	vaVector4i m_fullResOutScissorRect;
 	vaVector4i m_halfResOutScissorRect;
-
-	int m_depthMipLevels;
 
 	ID3D11Device* m_device;
 
@@ -397,8 +391,6 @@ private:
 	D3D11Texture2D m_pingPongHalfResultB;
 	D3D11Texture2D m_finalResults;
 	D3D11Texture2D m_finalResultsArrayViews[4];
-
-	bool m_requiresClear;
 
 private:
 
@@ -461,7 +453,6 @@ ASSAODX11::ASSAODX11(const ASSAO_CreateDescDX11* createDesc)
 	m_quarterSize = vaVector2i(0, 0);
 	m_fullResOutScissorRect = vaVector4i(0, 0, 0, 0);
 	m_halfResOutScissorRect = vaVector4i(0, 0, 0, 0);
-	m_depthMipLevels = 0;
 
 	m_constantsBuffer = NULL;
 	m_fullscreenVB = NULL;
@@ -496,8 +487,6 @@ ASSAODX11::ASSAODX11(const ASSAO_CreateDescDX11* createDesc)
 	m_blendStateMultiply = NULL;
 	m_blendStateOpaque = NULL;
 	m_depthStencilState = NULL;
-
-	m_requiresClear = false;
 }
 
 ASSAODX11::~ASSAODX11()
@@ -1000,7 +989,7 @@ void ASSAODX11::PrepareDepths(const ASSAO_Settings& settings, const ASSAO_Inputs
 	{
 		//VA_SCOPE_CPUGPU_TIMER( PrepareDepthMips, drawContext.APIContext );
 
-		for (int i = 1; i < m_depthMipLevels; i++)
+		for (int i = 1; i < SSAO_DEPTH_MIP_LEVELS; i++)
 		{
 			ID3D11RenderTargetView* fourDepthMips[] = {m_halfDepthsMipViews[0][i].RTV, m_halfDepthsMipViews[1][i].RTV, m_halfDepthsMipViews[2][i].RTV, m_halfDepthsMipViews[3][i].RTV};
 
@@ -1050,7 +1039,8 @@ void ASSAODX11::GenerateSSAO(const ASSAO_Settings& settings, const ASSAO_InputsD
 			blurPasses = Min(1, settings.BlurPassCount);
 		}
 
-		UpdateConstants(settings, inputs, pass);
+		if(pass > 0)
+			UpdateConstants(settings, inputs, pass);
 
 		D3D11Texture2D* pPingRT = &m_pingPongHalfResultA;
 		D3D11Texture2D* pPongRT = &m_pingPongHalfResultB;
@@ -1145,24 +1135,6 @@ void ASSAODX11::Draw(const ASSAO_Settings& settings, const ASSAO_Inputs* _inputs
 	{
 		// Backup D3D11 states (will be restored when it goes out of scope)
 		D3D11SSAOStateBackupRAII d3d11StatesBackup(dx11Context);
-
-		if (m_requiresClear)
-		{
-			float fourZeroes[4] = {0, 0, 0, 0};
-			float fourOnes[4] = {1, 1, 1, 1};
-			dx11Context->ClearRenderTargetView(m_halfDepths[0].RTV, fourZeroes);
-			dx11Context->ClearRenderTargetView(m_halfDepths[1].RTV, fourZeroes);
-			dx11Context->ClearRenderTargetView(m_halfDepths[2].RTV, fourZeroes);
-			dx11Context->ClearRenderTargetView(m_halfDepths[3].RTV, fourZeroes);
-			dx11Context->ClearRenderTargetView(m_pingPongHalfResultA.RTV, fourOnes);
-			dx11Context->ClearRenderTargetView(m_pingPongHalfResultB.RTV, fourZeroes);
-			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[0].RTV, fourOnes);
-			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[1].RTV, fourOnes);
-			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[2].RTV, fourOnes);
-			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[3].RTV, fourOnes);
-
-			m_requiresClear = false;
-		}
 
 		// Set effect samplers
 		ID3D11SamplerState* samplers[] =
@@ -1299,16 +1271,14 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 
 	float totalSizeInMB = 0.0f;
 
-	m_depthMipLevels = SSAO_DEPTH_MIP_LEVELS;
-
 	for (int i = 0; i < 4; i++)
 	{
-		if (m_halfDepths[i].ReCreateIfNeeded(m_device, m_halfSize, m_formats.DepthBufferViewspaceLinear, totalSizeInMB, m_depthMipLevels, 1, false))
+		if (m_halfDepths[i].ReCreateIfNeeded(m_device, m_halfSize, m_formats.DepthBufferViewspaceLinear, totalSizeInMB, SSAO_DEPTH_MIP_LEVELS, 1, false))
 		{
-			for (int j = 0; j < m_depthMipLevels; j++)
+			for (int j = 0; j < SSAO_DEPTH_MIP_LEVELS; j++)
 				m_halfDepthsMipViews[i][j].Reset();
 
-			for (int j = 0; j < m_depthMipLevels; j++)
+			for (int j = 0; j < SSAO_DEPTH_MIP_LEVELS; j++)
 				m_halfDepthsMipViews[i][j].ReCreateMIPViewIfNeeded(m_device, m_halfDepths[i], j);
 		}
 	}
@@ -1320,9 +1290,6 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 
 	totalSizeInMB /= 1024 * 1024;
 	//    m_debugInfo = vaStringTools::Format( "SSAO (approx. %.2fMB memory used) ", totalSizeInMB );
-
-	// trigger a full buffers clear first time; only really required when using scissor rects
-	m_requiresClear = true;
 }
 
 void ASSAODX11::UpdateConstants(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs, int pass)
