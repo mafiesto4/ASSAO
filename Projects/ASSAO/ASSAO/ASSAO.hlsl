@@ -64,12 +64,12 @@ struct ASSAOConstants
 
     float                   DepthPrecisionOffsetMod;
     float                   NegRecEffectRadius;                     // -1.0 / EffectRadius
-    float                   LoadCounterAvgDiv;                      // 1.0 / ( halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeX * halfDepthMip[SSAO_DEPTH_MIP_LEVELS-1].sizeY )
+    float                   Dummy0;
     float                   DetailAOStrength;
 
     float                   InvSharpness;
     int                     PassIndex;
-    float2                  Dummy4;
+    float2                  Dummy1;
 
     float4                  PatternRotScaleMatrices[5];
 };
