@@ -394,7 +394,6 @@ private:
 	ID3D11PixelShader* m_pixelShaderGenerate[4];
 	ID3D11PixelShader* m_pixelShaderSmartBlur;
 	ID3D11PixelShader* m_pixelShaderSmartBlurWide;
-	ID3D11PixelShader* m_pixelShaderApply;
 	ID3D11PixelShader* m_pixelShaderNonSmartBlur;
 	ID3D11PixelShader* m_pixelShaderNonSmartApply;
 	ID3D11PixelShader* m_pixelShaderNonSmartHalfApply;
@@ -492,7 +491,6 @@ ASSAODX11::ASSAODX11(const ASSAO_CreateDescDX11* createDesc)
 	m_pixelShaderSmartBlur = NULL;
 	m_pixelShaderSmartBlurWide = NULL;
 	m_pixelShaderNonSmartBlur = NULL;
-	m_pixelShaderApply = NULL;
 	m_pixelShaderNonSmartApply = NULL;
 	m_pixelShaderNonSmartHalfApply = NULL;
 
@@ -889,14 +887,6 @@ bool ASSAODX11::InitializeDX(const ASSAO_CreateDescDX11* createDesc)
 				return false;
 			}
 
-			hr = CreatePixelShader(createDesc, shaderMacros, "PSApply", "ps_5_0", shaderFlags, &m_pixelShaderApply);
-			if (FAILED( hr ))
-			{
-				assert( false );
-				CleanupDX();
-				return false;
-			}
-
 			hr = CreatePixelShader(createDesc, shaderMacros, "PSNonSmartApply", "ps_5_0", shaderFlags, &m_pixelShaderNonSmartApply);
 			if (FAILED( hr ))
 			{
@@ -939,7 +929,6 @@ void ASSAODX11::CleanupDX()
 	SAFE_RELEASE( m_pixelShaderSmartBlur );
 	SAFE_RELEASE( m_pixelShaderSmartBlurWide );
 	SAFE_RELEASE( m_pixelShaderNonSmartBlur );
-	SAFE_RELEASE( m_pixelShaderApply );
 	SAFE_RELEASE( m_pixelShaderNonSmartApply );
 	SAFE_RELEASE( m_pixelShaderNonSmartHalfApply );
 
@@ -1258,15 +1247,10 @@ void ASSAODX11::Draw(const ASSAO_Settings& settings, const ASSAO_Inputs* _inputs
 
 			ID3D11BlendState* blendState = (inputs->DrawOpaque) ? (m_blendStateOpaque) : (m_blendStateMultiply);
 
-			if (settings.QualityLevel == 0)
-			{
-				if (settings.SkipHalfPixelsOnLowQualityLevel)
-					FullscreenPassDraw(dx11Context, m_pixelShaderNonSmartHalfApply, blendState);
-				else
-					FullscreenPassDraw(dx11Context, m_pixelShaderNonSmartApply, blendState);
-			}
+			if (settings.SkipHalfPixelsOnLowQualityLevel)
+				FullscreenPassDraw(dx11Context, m_pixelShaderNonSmartHalfApply, blendState);
 			else
-				FullscreenPassDraw(dx11Context, m_pixelShaderApply, blendState);
+				FullscreenPassDraw(dx11Context, m_pixelShaderNonSmartApply, blendState);
 		}
 
 		// restore previous RTs again (because of the viewport hack)
