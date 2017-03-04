@@ -59,12 +59,6 @@
 #define SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT            (SSAO_MAX_TAPS-SSAO_ADAPTIVE_TAP_BASE_COUNT)
 #define SSAO_DEPTH_MIP_LEVELS                       4
 
-#ifdef INTEL_SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-#define SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION 1
-#else
-#define SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION 0
-#endif
-
 namespace
 {
     class vaVector2
@@ -158,8 +152,8 @@ namespace
 
         vaVector4               PatternRotScaleMatrices[5];
 
-        float                   NormalsUnpackMul;
-        float                   NormalsUnpackAdd;
+        float                   Dummy1;
+        float                   Dumy2;
         float                   DetailAOStrength;
         float                   Dummy0;
 
@@ -669,7 +663,6 @@ bool ASSAODX11::InitializeDX( const ASSAO_CreateDescDX11 * createDesc )
             { "SSAO_ADAPTIVE_TAP_BASE_COUNT" ,               SSA_STRINGIZIZER( SSAO_ADAPTIVE_TAP_BASE_COUNT               ) },
             { "SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT" ,           SSA_STRINGIZIZER( SSAO_ADAPTIVE_TAP_FLEXIBLE_COUNT           ) },
             { "SSAO_DEPTH_MIP_LEVELS" ,                      SSA_STRINGIZIZER( SSAO_DEPTH_MIP_LEVELS                         ) },
-            { "SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION", SSA_STRINGIZIZER( SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION   ) },
             
             { NULL, NULL }
         };
@@ -948,7 +941,7 @@ void           ASSAODX11::PrepareDepths( const ASSAO_Settings & settings, const 
     }
 }
 
-void           ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs, bool adaptiveBasePass )
+void ASSAODX11::GenerateSSAO( const ASSAO_Settings & settings, const ASSAO_InputsDX11 * inputs, bool adaptiveBasePass )
 {
     ID3D11ShaderResourceView * normalmapSRV = (inputs->NormalSRV==NULL)?(m_normals.SRV):(inputs->NormalSRV);
 
@@ -1186,17 +1179,9 @@ void           ASSAODX11::Draw( const ASSAO_Settings & settings, const ASSAO_Inp
 #endif
         // Generate SSAO
         GenerateSSAO( settings, inputs, false );
-
-        if( inputs->OverrideOutputRTV != nullptr )
-        {
-            // drawing into OverrideOutputRTV
-            dx11Context->OMSetRenderTargets( 1, &inputs->OverrideOutputRTV, NULL );
-        }
-        else
-        {
-            // restore previous RTs
-            d3d11StatesBackup.RestoreRTs( );
-        }
+    	
+    	// restore previous RTs
+    	d3d11StatesBackup.RestoreRTs( );
 
         // Apply
         {
@@ -1223,9 +1208,6 @@ void           ASSAODX11::Draw( const ASSAO_Settings & settings, const ASSAO_Inp
 
         // restore previous RTs again (because of the viewport hack)
         d3d11StatesBackup.RestoreRTs( );
-
-    //    FullscreenPassDraw( dx11Context, m_pixelShaderDebugDraw );
-
     }
 
 }
@@ -1388,8 +1370,8 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
         consts.Viewport2xPixelSize              = vaVector2( consts.ViewportPixelSize.x * 2.0f, consts.ViewportPixelSize.y * 2.0f );
         consts.Viewport2xPixelSize_x_025        = vaVector2( consts.Viewport2xPixelSize.x * 0.25f, consts.Viewport2xPixelSize.y * 0.25f );
 
-        float depthLinearizeMul                      = (inputs->MatricesRowMajorOrder)?(-proj.m[3][2]):(-proj.m[2][3]);           // float depthLinearizeMul = ( clipFar * clipNear ) / ( clipFar - clipNear );
-        float depthLinearizeAdd                      = (inputs->MatricesRowMajorOrder)?( proj.m[2][2]):( proj.m[2][2]);           // float depthLinearizeAdd = clipFar / ( clipFar - clipNear );
+        float depthLinearizeMul                      = -proj.m[3][2];           // float depthLinearizeMul = ( clipFar * clipNear ) / ( clipFar - clipNear );
+        float depthLinearizeAdd                      =  proj.m[2][2];           // float depthLinearizeAdd = clipFar / ( clipFar - clipNear );
         // correct the handedness issue. need to make sure this below is correct, but I think it is.
         if( depthLinearizeMul * depthLinearizeAdd < 0 )
             depthLinearizeAdd = -depthLinearizeAdd;
@@ -1453,10 +1435,9 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
         for( int subPass = 0; subPass < subPassCount; subPass++ )
         {
             int a = pass;
-            int b = subPass;
 
             int spmap[5] { 0, 1, 4, 3, 2 };
-            b = spmap[subPass];
+			int b = spmap[subPass];
 
             float ca, sa;
             float angle0 = ( (float)a + (float)b / (float)subPassCount ) * (3.1415926535897932384626433832795f) * 0.5f;
@@ -1468,32 +1449,7 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
             consts.PatternRotScaleMatrices[subPass] = vaVector4( scale * ca, scale * -sa, -scale * sa, -scale * ca );
         }
 
-        if( !generateNormals )
-        {
-            consts.NormalsUnpackMul = inputs->NormalsUnpackMul;
-            consts.NormalsUnpackAdd = inputs->NormalsUnpackAdd;
-        }
-        else
-        {
-            consts.NormalsUnpackMul = 2.0f;
-            consts.NormalsUnpackAdd = -1.0f;
-        }
         consts.DetailAOStrength = settings.DetailShadowStrength;
-        consts.Dummy0 = 0.0f;
-
-#if SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-        if( !generateNormals )
-        {
-            consts.NormalsWorldToViewspaceMatrix = inputs->NormalsWorldToViewspaceMatrix;
-            if( !inputs->MatricesRowMajorOrder )
-                consts.NormalsWorldToViewspaceMatrix.Transpose();
-        }
-        else
-        {
-            consts.NormalsWorldToViewspaceMatrix.SetIdentity( );
-        }
-#endif
-
 
         dx11Context->Unmap( m_constantsBuffer, 0 );
         //m_constantsBuffer.Update( dx11Context, consts );

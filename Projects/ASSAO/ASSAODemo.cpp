@@ -1084,7 +1084,7 @@ void ASSAODemo::OnRender( )
                 // extension for "Lowest"
                 ssaoSettings.QualityLevel = vaMath::Clamp( qualityLevelUI-1, 0, 4 );
                 ssaoSettings.SkipHalfPixelsOnLowQualityLevel = qualityLevelUI == 0;
-                
+
                 comboSizeY = ImGui::GetCursorPosY() - comboSizeY;
               
                 //if( ImGui::Button( qualityText.c_str(), ImVec2( ImGui::GetContentRegionAvailWidth(), 0.0f ) ) )
@@ -1128,7 +1128,6 @@ void ASSAODemo::OnRender( )
                 ImGuiToggleButton( "Animate camera", ImVec2( ImGui::GetContentRegionAvailWidth(), 0.0f ), m_flythroughCameraEnabled );
                 if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Enable/disable camera flyhrough; When disabled, right\nmouse click on screen for mouse+WSAD fly mode." );
 
-
                 {
                     bool fullscreen = m_application->IsFullscreen();
                     bool vsync = m_application->GetVsync();
@@ -1149,17 +1148,6 @@ void ASSAODemo::OnRender( )
                 {
                     m_settings.UseSimpleUI = false;
                 }
-                //if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Switch to more detailed, more complex UI with various options" );
-
-                // m_SSAOEffect_DevelopmentVersion->DebugShowEdges() = m_SSAOEffect_DevelopmentVersion->DebugShowNormals() = m_SSAOEffect_DevelopmentVersion->DebugShowSampleHeatmap() = false;
-                // switch( debugOverlay )
-                // {
-                // case 0: break;
-                // case 1: m_SSAOEffect_DevelopmentVersion->DebugShowEdges() = true;           break;
-                // case 2: m_SSAOEffect_DevelopmentVersion->DebugShowNormals() = true;         break;
-                // case 3: m_SSAOEffect_DevelopmentVersion->DebugShowSampleHeatmap() = true;   break;
-                // default: assert( false ); break;
-                // }
 
                 ImGui::PopStyleVar( );
             }

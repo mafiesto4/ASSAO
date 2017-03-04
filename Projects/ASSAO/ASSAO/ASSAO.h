@@ -28,9 +28,6 @@ struct ID3D11RenderTargetView;
 // Disabling adaptive quality uses a tiny bit less memory (21.75Mb instead of 22Mb at 1920x1080) and makes it easier to port
 #define INTEL_SSAO_ENABLE_ADAPTIVE_QUALITY
 
-// If enabled, will use ASSAO_Inputs::NormalsWorldToViewspaceMatrix, otherwise it is ignored (compiled out) as it adds approx 3% to the overall cost
-// #define INTEL_SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-
 struct ASSAO_Float4x4
 {
     union
@@ -149,17 +146,6 @@ struct ASSAO_Inputs
     // coordinates and will likely break for ortho projections.
     ASSAO_Float4x4                  ProjectionMatrix;
 
-#ifdef INTEL_SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-    // In case normals are in world space, matrix used to convert them to viewspace
-    ASSAO_Float4x4                  NormalsWorldToViewspaceMatrix;
-#endif
-
-    bool                            MatricesRowMajorOrder;
-
-    // Used for expanding UINT normals from [0, 1] to [-1, 1] if needed.
-    float                           NormalsUnpackMul;
-    float                           NormalsUnpackAdd;
-
     bool                            DrawOpaque;
 
 protected:
@@ -173,13 +159,7 @@ protected:
         ViewportY                   = 0;
         ViewportWidth               = 0;
         ViewportHeight              = 0;
-        MatricesRowMajorOrder       = true;
         DrawOpaque                  = false;
-        NormalsUnpackMul            = 2.0f;
-        NormalsUnpackAdd            = -1.0f;
-#ifdef INTEL_SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-        NormalsWorldToViewspaceMatrix.SetIdentity();
-#endif
     }
 public:
     virtual ~ASSAO_Inputs( )        { }
@@ -220,16 +200,11 @@ struct ASSAO_InputsDX11 : ASSAO_Inputs
     //    high detail AO and increases cost.
     ID3D11ShaderResourceView *      NormalSRV;
 
-    // If not NULL, instead writing into currently bound render target, Draw will use this. Current render target will be restored 
-    // to what it was originally after the Draw call.
-    ID3D11RenderTargetView *        OverrideOutputRTV;
-
     ASSAO_InputsDX11( )
     {
         DeviceContext       = nullptr;
         DepthSRV            = nullptr;
         NormalSRV           = nullptr;
-        OverrideOutputRTV   = nullptr;
     }
 };
 
@@ -247,8 +222,6 @@ public:
 
     // Returns currently allocated video memory in bytes; only valid after PreAllocateVideoMemory / Draw calls
     virtual unsigned int        GetAllocatedVideoMemory( )                                                      = 0;
-
-    virtual void                GetVersion( int & major, int & minor )                                          = 0;
 
     // Apply the SSAO effect to the currently selected render target using provided settings and platform-dependent inputs
     virtual void                Draw( const ASSAO_Settings & settings, const ASSAO_Inputs * inputs )    = 0;

@@ -33,7 +33,6 @@ static const float4 g_samplePatternMain[INTELSSAO_MAIN_DISK_SAMPLE_COUNT] =
 // these values can be changed (up to SSAO_MAX_TAPS) with no changes required elsewhere; values for 4th and 5th preset are ignored but array needed to avoid compilation errors
 // the actual number of texture samples is two times this value (each "tap" has two symmetrical depth texture samples)
 static const uint g_numTaps[5]   = { 3, 5, 12, 0, 0 };
-
 // an example of higher quality low/medium/high settings
 // static const uint g_numTaps[5]   = { 4, 9, 16, 0, 0 };
 
@@ -76,14 +75,10 @@ struct ASSAOConstants
 
     float4                  PatternRotScaleMatrices[5];
 
-    float                   NormalsUnpackMul;
-    float                   NormalsUnpackAdd;
+    float                   Dummy1;
+    float                   Dummy2;
     float                   DetailAOStrength;
     float                   Dummy0;
-
-#if SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-    float4x4                NormalsWorldToViewspaceMatrix;
-#endif
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -516,11 +511,7 @@ void PSPrepareDepthMip3( in float4 inPos : SV_POSITION/*, in float2 inUV : TEXCO
 
 float3 DecodeNormal( float3 encodedNormal )
 {
-    float3 normal = encodedNormal * g_ASSAOConsts.NormalsUnpackMul.xxx + g_ASSAOConsts.NormalsUnpackAdd.xxx;
-
-#if SSAO_ENABLE_NORMAL_WORLD_TO_VIEW_CONVERSION
-    normal = mul( normal, (float3x3)g_ASSAOConsts.NormalsWorldToViewspaceMatrix ).xyz; 
-#endif
+    float3 normal = encodedNormal * 2 - 1;
 
     // normal = normalize( normal );    // normalize adds around 2.5% cost on High settings but makes little (PSNR 66.7) visual difference when normals are as in the sample (stored in R8G8B8A8_UNORM,
     //                                  // decoded in the shader), however it will likely be required if using different encoding/decoding or the inputs are not normalized, etc.

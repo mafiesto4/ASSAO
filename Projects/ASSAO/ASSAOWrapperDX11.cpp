@@ -127,7 +127,6 @@ void ASSAOWrapperDX11::Draw( vaDrawContext & drawContext, vaTexture & depthTextu
     inputs.ViewportHeight               = drawContext.APIContext.GetViewport().Height;
     inputs.DepthSRV                     = depthTexture.SafeCast<vaTextureDX11*>( )->GetSRV( );
     inputs.NormalSRV                    = (normalmapTexture != nullptr)?(normalmapTexture->SafeCast<vaTextureDX11*>( )->GetSRV( )):(nullptr);
-    inputs.MatricesRowMajorOrder        = true;
     inputs.DrawOpaque                   = !blend;
 
     m_effect->Draw( m_settings, &inputs );
