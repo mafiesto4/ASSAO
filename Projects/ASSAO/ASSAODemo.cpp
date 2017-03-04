@@ -87,8 +87,6 @@ ASSAODemo::ASSAODemo( )
     }
 
     m_flythroughCameraEnabled = false;
-
-    m_screenshotCapturePath = L"";
 }
 
 ASSAODemo::~ASSAODemo( )
@@ -588,43 +586,27 @@ void ASSAODemo::OnRender( )
 
     vaVector4i scissorRectForSSAO( 0, 0, 0, 0 );
 
-    // update resolution and camera FOV if there's border expansion
-    const int drawResolutionBorderExpansionFactor = 12; // will be expanded by Height / expansionFactor
+    // update resolution and camera FOV
     {
-        if( m_settings.ExpandDrawResolution )
-        {
-            m_expandedSceneBorder = (vaMath::Min( mainViewport.Width, mainViewport.Height ) / drawResolutionBorderExpansionFactor) / 2 * 2;
-        }
-        else
-        {
-            m_expandedSceneBorder = 0;
-        }
-
-        m_expandedSceneResolution.x = mainViewport.Width + m_expandedSceneBorder * 2;
-        m_expandedSceneResolution.y = mainViewport.Height + m_expandedSceneBorder * 2;
-
-        double yScaleDueToBorder = (m_expandedSceneResolution.y * 0.5) / (double)(mainViewport.Height * 0.5);
+        double yScaleDueToBorder = (mainViewport.Height * 0.5) / (double)(mainViewport.Height * 0.5);
 
         double nonExpandedTan = std::tan( m_settings.CameraYFov / 2.0 );
         float expandedFOV = (float)(std::atan( nonExpandedTan * yScaleDueToBorder ) * 2.0);
 
         m_camera->SetYFOV( expandedFOV );
-        m_camera->SetViewportSize( m_expandedSceneResolution.x, m_expandedSceneResolution.y );
+        m_camera->SetViewportSize(mainViewport.Width, mainViewport.Height);
         m_camera->Tick( 0.0f, false );  // re-tick for expanded focus
 
-        mainViewport.Width  = m_expandedSceneResolution.x;
-        mainViewport.Height = m_expandedSceneResolution.y;
-
-        scissorRectForSSAO.x   = m_expandedSceneBorder;
-        scissorRectForSSAO.y   = m_expandedSceneBorder;
-        scissorRectForSSAO.z   = mainViewport.Width  - m_expandedSceneBorder;
-        scissorRectForSSAO.w   = mainViewport.Height - m_expandedSceneBorder;
+        scissorRectForSSAO.x   = 0;
+        scissorRectForSSAO.y   = 0;
+        scissorRectForSSAO.z   = mainViewport.Width;
+        scissorRectForSSAO.w   = mainViewport.Height;
     }
  
     // update GBuffer resources if needed
     {
         vaDrawContext drawContext( *m_camera.get( ), mainContext, *m_renderingGlobals.get( ), m_lighting.get( ) );
-        m_GBuffer->UpdateResources( drawContext, m_expandedSceneResolution.x, m_expandedSceneResolution.y );
+        m_GBuffer->UpdateResources( drawContext, mainViewport.Width, mainViewport.Height );
     }
 
     // decide on the main render target / depth
@@ -824,128 +806,6 @@ void ASSAODemo::OnRender( )
         m_renderDevice->DrawDebugCanvas3D( drawContext );
     }
 
-    {
-        VA_SCOPE_CPU_TIMER( DebugCanvas2DAndStuff );
-
-        if( m_displaySampleDisk.size() != 0 )
-        {
-            uint32 colorBackground  = 0xC0FFFFFF;
-            uint32 colorDisk        = 0xFF008000;
-            uint32 colorDiskBk      = 0x80008000;
-            uint32 colorCentre      = 0xFF000000;
-            uint32 colorLine        = 0x50FF0000;
-            uint32 colorText        = 0xFF000000;
-            uint32 colorTextBk      = 0xFF808080;
-
-            float drawRadius = 180.0f;
-
-            vaVector2 rectSize( drawRadius * 2.4f, drawRadius * 2.4f );
-            vaVector2 rectCentre( rectSize.x * 0.6f, rectSize.y * 0.6f );
-            vaVector2 rectTopLeft( rectCentre.x - rectSize.x * 0.5f, rectCentre.y - rectSize.y * 0.5f );
-
-            m_renderDevice->GetCanvas2D( )->FillRectangle( rectTopLeft.x, rectTopLeft.y, rectSize.x, rectSize.y, colorBackground );
-            
-            vaVector4 ptPrev;
-
-            //m_currentPoissonDiskMinDist = vaMath::Clamp( m_currentPoissonDiskMinDist, 0.05f, 1.0f );
-            float circleRadius = 0.025f;
-
-            ptPrev = vaVector4( 0.0f, 0.0f, 0.0f, 0.0f );
-            for( int i = 0; i < m_displaySampleDisk.size(); i++ )
-            {
-                vaVector4 & pt = m_displaySampleDisk[i];
-
-                vaVector2 lineFrom  = vaVector2( rectCentre.x + drawRadius * ptPrev.x, rectCentre.y + drawRadius * ptPrev.y );
-                vaVector2 lineTo    = vaVector2( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y );
-
-                vaVector2 lineDir = lineTo - lineFrom;
-                float lineLength = lineDir.Length();
-
-                if( (lineLength > VA_EPSf) && (i>0) )
-                {
-                    lineDir /= lineLength;
-                    float shortenAmount = vaMath::Min( circleRadius * drawRadius * 2.0f, lineLength * 0.25f );
-                    lineFrom += lineDir * shortenAmount;
-                    lineTo -= lineDir * shortenAmount;
-
-                    m_renderDevice->GetCanvas2D()->DrawLine( lineFrom, lineTo, colorLine );
-                    m_renderDevice->GetCanvas2D()->DrawLineArrowhead( lineFrom, lineTo, drawRadius * 0.03f, colorLine );
-
-                    lineFrom += vaVector2( 1, 0 ); lineTo += vaVector2( 1, 0 );
-                    m_renderDevice->GetCanvas2D()->DrawLine( lineFrom, lineTo, colorLine );
-                    m_renderDevice->GetCanvas2D()->DrawLineArrowhead( lineFrom, lineTo, drawRadius * 0.03f, colorLine );
-                    lineFrom += vaVector2( -1, 1 ); lineTo += vaVector2( -1, 1 );
-                    m_renderDevice->GetCanvas2D()->DrawLine( lineFrom, lineTo, colorLine );
-                    m_renderDevice->GetCanvas2D()->DrawLineArrowhead( lineFrom, lineTo, drawRadius * 0.03f, colorLine );
-                    lineFrom += vaVector2( 1, 0 ); lineTo += vaVector2( 1, 0 );
-                    m_renderDevice->GetCanvas2D()->DrawLine( lineFrom, lineTo, colorLine );
-                    m_renderDevice->GetCanvas2D()->DrawLineArrowhead( lineFrom, lineTo, drawRadius * 0.03f, colorLine );
-                }
-
-                ptPrev = pt;
-            }
-
-            ptPrev = vaVector4( 0.0f, 0.0f, 0.0f, 0.0f );
-            for( int i = 0; i < m_displaySampleDisk.size(); i++ )
-            {
-                vaVector4 & pt = m_displaySampleDisk[i];
-
-                m_renderDevice->GetCanvas2D( )->DrawCircle( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, drawRadius * circleRadius, colorDiskBk, 1.0f );
-                m_renderDevice->GetCanvas2D( )->DrawCircle( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, drawRadius * circleRadius - 0.5f, colorDiskBk, 1.0f );
-                m_renderDevice->GetCanvas2D( )->DrawCircle( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, drawRadius * circleRadius - 1.0f, colorDisk, 1.0f );
-                m_renderDevice->GetCanvas2D( )->DrawCircle( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, drawRadius * circleRadius - 1.5f, colorDiskBk, 1.0f );
-                m_renderDevice->GetCanvas2D( )->DrawCircle( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, drawRadius * circleRadius - 1.9f, colorDiskBk, 1.0f );
-                //m_renderDevice->GetCanvas2D()->DrawLine( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y, rectCentre.x + drawRadius * pt.x + 1, rectCentre.y + drawRadius * pt.y + 1, colorCentre );
-
-                m_renderDevice->GetCanvas2D( )->DrawString( (int)(rectCentre.x + drawRadius * pt.x + 5.0f), (int)(rectCentre.y + drawRadius * pt.y + 5.0f), colorText, colorTextBk, "%d", i );
-
-                ptPrev = pt;
-            }
-
-            /*
-            const int halfSplits = 30;
-            static int centerDiskIndex = 0;
-            static float zzmzzm = 1.0f;
-            if( ( vaInputKeyboardBase::GetCurrent( ) != nullptr ) && vaInputKeyboardBase::GetCurrent( )->IsKeyClicked( KK_OEM_COMMA ) )
-                centerDiskIndex--;
-            if( ( vaInputKeyboardBase::GetCurrent( ) != nullptr ) && vaInputKeyboardBase::GetCurrent( )->IsKeyClicked( KK_OEM_PERIOD ) )
-                centerDiskIndex++;
-            centerDiskIndex = centerDiskIndex % m_displaySampleDisk.size();
-
-            vaVector4 & pt = m_displaySampleDisk[centerDiskIndex];
-
-            for( int i = 0; i < halfSplits*halfSplits*4; i++ )
-            {
-                vaVector2 guessOffset = GetGuessOffset( i, halfSplits*halfSplits*4 );
-                float dx = guessOffset.x;
-                float dy = guessOffset.y;
-
-                if( !m_sampleGenerator.ComputeIsAcceptable( pt.AsVec2() + guessOffset, m_displaySampleDisk, centerDiskIndex ) )
-                    continue;
-
-                vaVector2 lineFrom  = vaVector2( rectCentre.x + drawRadius * pt.x, rectCentre.y + drawRadius * pt.y );
-                vaVector2 lineTo    = vaVector2( rectCentre.x + drawRadius * (pt.x + dx), rectCentre.y + drawRadius * (pt.y + dy) );
-                lineTo    -= vaVector2( 0.5f, 0.5f );
-                lineFrom  = lineTo + vaVector2( 1.0f, 1.0f );
-                m_renderDevice->GetCanvas2D()->DrawLine( lineFrom, lineTo, 0xFF000000 );
-            }
-            */
-        }
-
-        m_renderDevice->DrawDebugCanvas2D( );
-    }
-
-    if( m_screenshotCapturePath != L"" )
-    {
-        wstring directory;
-        vaStringTools::SplitPath( m_screenshotCapturePath, &directory, nullptr, nullptr );
-        vaFileTools::EnsureDirectoryExists( directory.c_str() );
-
-        vaDrawContext drawContext( *m_camera.get( ), mainContext, *m_renderingGlobals.get( ) );
-        m_postProcess->SaveTextureToPNGFile( drawContext, m_screenshotCapturePath, *mainColorRT.get( ) );
-        m_screenshotCapturePath = L"";
-    }
-
     // restore display 
     mainContext.SetRenderTarget( m_renderDevice->GetMainChainColor(), m_renderDevice->GetMainChainDepth(), true );
 
@@ -964,7 +824,7 @@ void ASSAODemo::OnRender( )
         // this sets up global constants
         m_renderingGlobals->SetAPIGlobals( drawContext );
     
-        m_postProcess->StretchRect( drawContext, *mainColorRT, vaVector4( (float)m_expandedSceneBorder, (float)m_expandedSceneBorder, (float)m_expandedSceneBorder+mainViewport.Width, (float)m_expandedSceneBorder+mainViewport.Height ), vaVector4( 0.0f, 0.0f, (float)mainViewport.Width, (float)mainViewport.Height), true );
+        m_postProcess->StretchRect( drawContext, *mainColorRT, vaVector4( (float)0, (float)0, (float)0+mainViewport.Width, (float)0+mainViewport.Height ), vaVector4( 0.0f, 0.0f, (float)mainViewport.Width, (float)mainViewport.Height), true );
 
         mainViewport = mainViewportBackup;
     }
@@ -1005,10 +865,6 @@ void ASSAODemo::OnRender( )
                 ImGui::Checkbox( "Show wireframe", &m_settings.ShowWireframe );
                 float yfov = m_settings.CameraYFov / (VA_PIf) * 360.0f ;
                 if( ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Wireframe" );
-
-                ImGui::Checkbox( "Expand frustum beyond screen edges", &m_settings.ExpandDrawResolution );
-                float expansionFactor = 1.0f / (float)drawResolutionBorderExpansionFactor * 100.0f;
-                if( ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Expands scene resolution by %.1f%% on each side to provide more depth input to SSAO to avoid SSAO rendering artifacts at screen edges; only depth is needed although the demo renders colour as well", expansionFactor );
 
                 ImGui::InputFloat( "CameraFOV", &yfov, 5.0f, 0.0f, 1 );
                 m_settings.CameraYFov = vaMath::Clamp( yfov, 20.0f, 140.0f ) * (VA_PIf) / 360.0f;
@@ -1209,13 +1065,6 @@ void ASSAODemo::OnRender( )
                     ImGui::PopItemWidth( );
                 }
 
-                {
-                    ImGui::SameLine( halfwidth + framePadding * 3.0f );
-
-                    ImGuiToggleButton( "Expand resolution", ImVec2( halfwidth, 0.0f ), m_settings.ExpandDrawResolution );
-                    float expansionFactor = 1.0f / (float)drawResolutionBorderExpansionFactor * 100.0f;
-                    if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Expands scene resolution by %.1f%% on each side to provide more depth input to SSAO to avoid SSAO rendering artifacts at screen edges; only depth is needed although the demo renders colour as well", expansionFactor );
-                }
                 bool texturingEnabled = !m_settings.DisableTexturing;
                 ImGuiToggleButton( "Texturing enabled", ImVec2( ImGui::GetContentRegionAvailWidth(), 0.0f ), texturingEnabled );
                 if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Enable/disable texturing to better expose the effect." );

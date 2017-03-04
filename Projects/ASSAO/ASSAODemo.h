@@ -58,7 +58,7 @@ namespace VertexAsylum
             int                                     Dummy1;
             bool                                    DebugShowOpaqueSSAO;
             bool                                    DisableTexturing;
-            bool                                    ExpandDrawResolution;       // to handle SSAO artifacts around screen borders
+            bool                                    Dummy2;
             float                                   CameraYFov;
             bool                                    UseSimpleUI;
 
@@ -69,7 +69,6 @@ namespace VertexAsylum
                 EnableSSAO                  = true;
                 DebugShowOpaqueSSAO         = false;
                 DisableTexturing            = false;
-                ExpandDrawResolution        = false;
                 CameraYFov                  = 90.0f / 360.0f * VA_PIf;
                 UseSimpleUI                  = true;
             }
@@ -126,18 +125,10 @@ namespace VertexAsylum
         shared_ptr<vaAssetPack>                 m_assetsSibenik;
         shared_ptr<vaAssetPack>                 m_assetsSponza;
         shared_ptr<vaAssetPack>                 m_assetsLostEmpire;
-        
-        vector<vaVector4>                       m_displaySampleDisk;
 
-        
         bool                                    m_flythroughCameraEnabled;
 
-        int                                     m_expandedSceneBorder;
-        vaVector2i                              m_expandedSceneResolution;
-
         uint64                                  m_frameIndex;
-
-        wstring                                 m_screenshotCapturePath;
 
     protected:
         SSAODemoSettings                        m_settings;
@@ -182,11 +173,6 @@ namespace VertexAsylum
 
         void                                    LoadCamera( int index = -1 );
         void                                    SaveCamera( int index = -1 );
-
-        // just for debug displaying purposes
-        void                                    SetDisplaySampleDisk( const vector<vaVector4> & displaySampleDisk = vector<vaVector4>() )                   { m_displaySampleDisk = displaySampleDisk; }
-
-        void                                    CaptureScreenshotNextFrame( const wstring & path )                                                          { m_screenshotCapturePath = vaFileTools::GetAbsolutePath( path ); }
 
         std::shared_ptr<vaCameraControllerBase> GetCameraController( );
 
