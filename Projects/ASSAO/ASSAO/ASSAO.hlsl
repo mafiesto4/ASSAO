@@ -47,7 +47,8 @@ struct ASSAOConstants
     float2 NDCToViewAdd;
 
     int2 PerPassFullResCoordOffset;
-    float2 PerPassFullResUVOffset;
+	int PassIndex;
+	float Dummy0;
 
     float2 Viewport2xPixelSize;
     float2 Viewport2xPixelSize_x_025; // Viewport2xPixelSize * 0.25 (for fusing add+mul into mad)
@@ -66,10 +67,6 @@ struct ASSAOConstants
     float NegRecEffectRadius;               // -1.0 / EffectRadius
     float InvSharpness;
     float DetailAOStrength;
-
-    int PassIndex;
-    float Dummy1;
-    float2 Dummy2;
 
     float4 PatternRotScaleMatrices[5];
 };
@@ -293,22 +290,22 @@ void PrepareDepthMip(const float4 inPos/*, const float2 inUV*/, int mipLevel, ou
 	float depthsOutArr[4];
 
 	// How to Gather a specific mip level?
-	depthsArr[0].x = g_ViewspaceDepthSource[baseCoords + int2(0, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[0].y = g_ViewspaceDepthSource[baseCoords + int2(1, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[0].z = g_ViewspaceDepthSource[baseCoords + int2(0, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[0].w = g_ViewspaceDepthSource[baseCoords + int2(1, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[1].x = g_ViewspaceDepthSource1[baseCoords + int2(0, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[1].y = g_ViewspaceDepthSource1[baseCoords + int2(1, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[1].z = g_ViewspaceDepthSource1[baseCoords + int2(0, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[1].w = g_ViewspaceDepthSource1[baseCoords + int2(1, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[2].x = g_ViewspaceDepthSource2[baseCoords + int2(0, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[2].y = g_ViewspaceDepthSource2[baseCoords + int2(1, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[2].z = g_ViewspaceDepthSource2[baseCoords + int2(0, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[2].w = g_ViewspaceDepthSource2[baseCoords + int2(1, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[3].x = g_ViewspaceDepthSource3[baseCoords + int2(0, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[3].y = g_ViewspaceDepthSource3[baseCoords + int2(1, 0)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[3].z = g_ViewspaceDepthSource3[baseCoords + int2(0, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
-	depthsArr[3].w = g_ViewspaceDepthSource3[baseCoords + int2(1, 1)].x;// * g_ASSAOConsts.MaxViewspaceDepth;
+	depthsArr[0].x = g_ViewspaceDepthSource[baseCoords + int2(0, 0)].x;
+	depthsArr[0].y = g_ViewspaceDepthSource[baseCoords + int2(1, 0)].x;
+	depthsArr[0].z = g_ViewspaceDepthSource[baseCoords + int2(0, 1)].x;
+	depthsArr[0].w = g_ViewspaceDepthSource[baseCoords + int2(1, 1)].x;
+	depthsArr[1].x = g_ViewspaceDepthSource1[baseCoords + int2(0, 0)].x;
+	depthsArr[1].y = g_ViewspaceDepthSource1[baseCoords + int2(1, 0)].x;
+	depthsArr[1].z = g_ViewspaceDepthSource1[baseCoords + int2(0, 1)].x;
+	depthsArr[1].w = g_ViewspaceDepthSource1[baseCoords + int2(1, 1)].x;
+	depthsArr[2].x = g_ViewspaceDepthSource2[baseCoords + int2(0, 0)].x;
+	depthsArr[2].y = g_ViewspaceDepthSource2[baseCoords + int2(1, 0)].x;
+	depthsArr[2].z = g_ViewspaceDepthSource2[baseCoords + int2(0, 1)].x;
+	depthsArr[2].w = g_ViewspaceDepthSource2[baseCoords + int2(1, 1)].x;
+	depthsArr[3].x = g_ViewspaceDepthSource3[baseCoords + int2(0, 0)].x;
+	depthsArr[3].y = g_ViewspaceDepthSource3[baseCoords + int2(1, 0)].x;
+	depthsArr[3].z = g_ViewspaceDepthSource3[baseCoords + int2(0, 1)].x;
+	depthsArr[3].w = g_ViewspaceDepthSource3[baseCoords + int2(1, 1)].x;
 
 	const uint2 SVPosui = uint2(inPos.xy);
 	const uint pseudoRandomA = (SVPosui.x) + 2 * (SVPosui.y);
@@ -390,7 +387,7 @@ float CalculatePixelObscurance(float3 pixelNormal, float3 hitDelta, float fallof
 void SSAOTapInner(const int qualityLevel, inout float obscuranceSum, inout float weightSum, const float2 samplingUV, const float mipLevel, const float3 pixCenterPos, const float3 negViewspaceDir, float3 pixelNormal, const float falloffCalcMulSq, const float weightMod, const int dbgTapIndex)
 {
 	// Get depth at sample
-	float viewspaceSampleZ = g_ViewspaceDepthSource.SampleLevel(g_ViewspaceDepthTapSampler, samplingUV.xy, mipLevel).x; // * g_ASSAOConsts.MaxViewspaceDepth;
+	float viewspaceSampleZ = g_ViewspaceDepthSource.SampleLevel(g_ViewspaceDepthTapSampler, samplingUV.xy, mipLevel).x; 
 
 	// Convert to viewspace
 	float3 hitPos = NDCToViewspace(samplingUV.xy, viewspaceSampleZ).xyz;
@@ -466,7 +463,7 @@ void GenerateSSAOShadowsInternal(out float outShadowTerm, out float4 outEdges, o
 	float4 valuesBR = g_ViewspaceDepthSource.GatherRed(g_PointMirrorSampler, SVPosRounded * g_ASSAOConsts.HalfViewportPixelSize, int2(1, 1));
 
 	// Get this pixel's viewspace depth
-	pixZ = valuesUL.y; //float pixZ = g_ViewspaceDepthSource.SampleLevel( g_PointMirrorSampler, normalizedScreenPos, 0.0 ).x; // * g_ASSAOConsts.MaxViewspaceDepth;
+	pixZ = valuesUL.y; //float pixZ = g_ViewspaceDepthSource.SampleLevel( g_PointMirrorSampler, normalizedScreenPos, 0.0 ).x; 
 
 	// Get left right top bottom neighbouring pixels for edge detection (gets compiled out on qualityLevel == 0)
 	pixLZ = valuesUL.x;

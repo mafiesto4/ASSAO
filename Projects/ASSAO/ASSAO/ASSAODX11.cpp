@@ -150,7 +150,8 @@ namespace
 		vaVector2 NDCToViewAdd;
 
 		vaVector2i PerPassFullResCoordOffset;
-		vaVector2 PerPassFullResUVOffset;
+		int PassIndex;
+		float Dummy0;
 
 		vaVector2 Viewport2xPixelSize;
 		vaVector2 Viewport2xPixelSize_x_025; // Viewport2xPixelSize * 0.25 (for fusing add+mul into mad)
@@ -169,10 +170,6 @@ namespace
 		float NegRecEffectRadius; // -1.0 / EffectRadius
 		float InvSharpness;
 		float DetailAOStrength;
-
-		int PassIndex;
-		float Dummy1;
-		vaVector2 Dummy2;
 
 		vaVector4 PatternRotScaleMatrices[5];
 	};
@@ -1397,7 +1394,6 @@ void ASSAODX11::UpdateConstants(const ASSAO_Settings& settings, const ASSAO_Inpu
 		consts.NegRecEffectRadius = -1.0f / consts.EffectRadius;
 
 		consts.PerPassFullResCoordOffset = vaVector2i(pass % 2, pass / 2);
-		consts.PerPassFullResUVOffset = vaVector2(((pass % 2) - 0.0f) / m_size.x, ((pass / 2) - 0.0f) / m_size.y);
 
 		consts.InvSharpness = Clamp(1.0f - settings.Sharpness, 0.0f, 1.0f);
 		consts.PassIndex = pass;
