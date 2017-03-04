@@ -44,15 +44,13 @@
 #define SSAO_SAMPLERS_SLOT1                         1
 #define SSAO_SAMPLERS_SLOT2                         2
 #define SSAO_SAMPLERS_SLOT3                         3
-#define SSAO_NORMALMAP_OUT_UAV_SLOT                 4
 #define SSAO_CONSTANTS_BUFFERSLOT                   0
 #define SSAO_TEXTURE_SLOT0                          0
 #define SSAO_TEXTURE_SLOT1                          1
 #define SSAO_TEXTURE_SLOT2                          2
 #define SSAO_TEXTURE_SLOT3                          3
-#define SSAO_TEXTURE_SLOT4                          4
 
-#define SSAO_DEPTH_MIP_LEVELS                       4
+#define SSAO_DEPTH_MIP_LEVELS 2
 
 namespace
 {
@@ -169,12 +167,12 @@ namespace
 
 		float DepthPrecisionOffsetMod;
 		float NegRecEffectRadius; // -1.0 / EffectRadius
-		float Dummy0;
+		float InvSharpness;
 		float DetailAOStrength;
 
-		float InvSharpness;
 		int PassIndex;
-		vaVector2 Dummy1;
+		float Dummy1;
+		vaVector2 Dummy2;
 
 		vaVector4 PatternRotScaleMatrices[5];
 	};
@@ -387,9 +385,7 @@ private:
 	ID3D11DepthStencilState* m_depthStencilState;
 
 	ID3D11PixelShader* m_pixelShaderPrepareDepths;
-	ID3D11PixelShader* m_pixelShaderPrepareDepthsAndNormals;
 	ID3D11PixelShader* m_pixelShaderPrepareDepthsHalf;
-	ID3D11PixelShader* m_pixelShaderPrepareDepthsAndNormalsHalf;
 	ID3D11PixelShader* m_pixelShaderPrepareDepthMip[SSAO_DEPTH_MIP_LEVELS - 1];
 	ID3D11PixelShader* m_pixelShaderGenerate[4];
 	ID3D11PixelShader* m_pixelShaderSmartBlur;
@@ -404,7 +400,6 @@ private:
 	D3D11Texture2D m_pingPongHalfResultB;
 	D3D11Texture2D m_finalResults;
 	D3D11Texture2D m_finalResultsArrayViews[4];
-	D3D11Texture2D m_normals;
 
 	bool m_requiresClear;
 
@@ -435,7 +430,6 @@ private:
 	void PrepareDepths(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs);
 	void GenerateSSAO(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs);
 };
-
 
 ASSAO_Effect* ASSAO_Effect::CreateInstance(const ASSAO_CreateDescDX11* createDesc)
 {
@@ -481,9 +475,7 @@ ASSAODX11::ASSAODX11(const ASSAO_CreateDescDX11* createDesc)
 	m_rasterizerState = NULL;
 
 	m_pixelShaderPrepareDepths = NULL;
-	m_pixelShaderPrepareDepthsAndNormals = NULL;
 	m_pixelShaderPrepareDepthsHalf = NULL;
-	m_pixelShaderPrepareDepthsAndNormalsHalf = NULL;
 	for (int i = 0; i < _countof( m_pixelShaderPrepareDepthMip ); i++)
 		m_pixelShaderPrepareDepthMip[i] = NULL;
 	for (int i = 0; i < _countof( m_pixelShaderGenerate ); i++)
@@ -783,23 +775,7 @@ bool ASSAODX11::InitializeDX(const ASSAO_CreateDescDX11* createDesc)
 				return false;
 			}
 
-			hr = CreatePixelShader(createDesc, shaderMacros, "PSPrepareDepthsAndNormals", "ps_5_0", shaderFlags, &m_pixelShaderPrepareDepthsAndNormals);
-			if (FAILED( hr ))
-			{
-				assert( false );
-				CleanupDX();
-				return false;
-			}
-
 			hr = CreatePixelShader(createDesc, shaderMacros, "PSPrepareDepthsHalf", "ps_5_0", shaderFlags, &m_pixelShaderPrepareDepthsHalf);
-			if (FAILED( hr ))
-			{
-				assert( false );
-				CleanupDX();
-				return false;
-			}
-
-			hr = CreatePixelShader(createDesc, shaderMacros, "PSPrepareDepthsAndNormalsHalf", "ps_5_0", shaderFlags, &m_pixelShaderPrepareDepthsAndNormalsHalf);
 			if (FAILED( hr ))
 			{
 				assert( false );
@@ -919,9 +895,7 @@ void ASSAODX11::CleanupDX()
 	SAFE_RELEASE( m_rasterizerState );
 
 	SAFE_RELEASE( m_pixelShaderPrepareDepths );
-	SAFE_RELEASE( m_pixelShaderPrepareDepthsAndNormals );
 	SAFE_RELEASE( m_pixelShaderPrepareDepthsHalf );
-	SAFE_RELEASE( m_pixelShaderPrepareDepthsAndNormalsHalf );
 	for (int i = 0; i < _countof( m_pixelShaderPrepareDepthMip ); i++)
 	SAFE_RELEASE( m_pixelShaderPrepareDepthMip[ i ] );
 	for (int i = 0; i < _countof( m_pixelShaderGenerate ); i++)
@@ -994,7 +968,7 @@ void ASSAODX11::FullscreenPassDraw(ID3D11DeviceContext* context, ID3D11PixelShad
 
 void ASSAODX11::PrepareDepths(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs)
 {
-	bool generateNormals = inputs->NormalSRV == NULL;
+	assert(inputs->NormalSRV != nullptr);
 
 	ID3D11DeviceContext* dx11Context = inputs->DeviceContext;
 
@@ -1009,7 +983,6 @@ void ASSAODX11::PrepareDepths(const ASSAO_Settings& settings, const ASSAO_Inputs
 
 	ID3D11RenderTargetView* fourDepths[] = {m_halfDepths[0].RTV, m_halfDepths[1].RTV, m_halfDepths[2].RTV, m_halfDepths[3].RTV};
 	ID3D11RenderTargetView* twoDepths[] = {m_halfDepths[0].RTV, m_halfDepths[3].RTV};
-	if (!generateNormals)
 	{
 		//VA_SCOPE_CPUGPU_TIMER( PrepareDepths, drawContext.APIContext );
 
@@ -1022,22 +995,6 @@ void ASSAODX11::PrepareDepths(const ASSAO_Settings& settings, const ASSAO_Inputs
 		{
 			dx11Context->OMSetRenderTargets(_countof(fourDepths), fourDepths, NULL);
 			FullscreenPassDraw(dx11Context, m_pixelShaderPrepareDepths);
-		}
-	}
-	else
-	{
-		//VA_SCOPE_CPUGPU_TIMER( PrepareDepthsAndNormals, drawContext.APIContext );
-
-		ID3D11UnorderedAccessView* UAVs[] = {m_normals.UAV};
-		if (settings.SkipHalfPixelsOnLowQualityLevel)
-		{
-			dx11Context->OMSetRenderTargetsAndUnorderedAccessViews(_countof(twoDepths), twoDepths, NULL, SSAO_NORMALMAP_OUT_UAV_SLOT, 1, UAVs, NULL);
-			FullscreenPassDraw(dx11Context, m_pixelShaderPrepareDepthsAndNormalsHalf);
-		}
-		else
-		{
-			dx11Context->OMSetRenderTargetsAndUnorderedAccessViews(_countof(fourDepths), fourDepths, NULL, SSAO_NORMALMAP_OUT_UAV_SLOT, 1, UAVs, NULL);
-			FullscreenPassDraw(dx11Context, m_pixelShaderPrepareDepthsAndNormals);
 		}
 	}
 
@@ -1064,8 +1021,7 @@ void ASSAODX11::PrepareDepths(const ASSAO_Settings& settings, const ASSAO_Inputs
 
 void ASSAODX11::GenerateSSAO(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs)
 {
-	ID3D11ShaderResourceView* normalmapSRV = (inputs->NormalSRV == NULL) ? (m_normals.SRV) : (inputs->NormalSRV);
-
+	ID3D11ShaderResourceView* normalmapSRV = inputs->NormalSRV;
 	ID3D11DeviceContext* dx11Context = inputs->DeviceContext;
 
 	{
@@ -1145,7 +1101,7 @@ void ASSAODX11::GenerateSSAO(const ASSAO_Settings& settings, const ASSAO_InputsD
 				dx11Context->OMSetRenderTargets(_countof( rts ), rts, NULL);
 
 				ID3D11ShaderResourceView* SRVs[] = {pPingRT->SRV};
-				dx11Context->PSSetShaderResources(SSAO_TEXTURE_SLOT2, _countof(SRVs), SRVs);
+				dx11Context->PSSetShaderResources(SSAO_TEXTURE_SLOT0, _countof(SRVs), SRVs);
 
 				if (settings.QualityLevel != 0)
 				{
@@ -1207,8 +1163,6 @@ void ASSAODX11::Draw(const ASSAO_Settings& settings, const ASSAO_Inputs* _inputs
 			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[1].RTV, fourOnes);
 			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[2].RTV, fourOnes);
 			dx11Context->ClearRenderTargetView(m_finalResultsArrayViews[3].RTV, fourOnes);
-			if (m_normals.RTV != NULL)
-				dx11Context->ClearRenderTargetView(m_normals.RTV, fourZeroes);
 
 			m_requiresClear = false;
 		}
@@ -1238,7 +1192,7 @@ void ASSAODX11::Draw(const ASSAO_Settings& settings, const ASSAO_Inputs* _inputs
 		// Apply
 		{
 			// select 4 deinterleaved AO textures (texture array)
-			dx11Context->PSSetShaderResources(SSAO_TEXTURE_SLOT4, 1, &m_finalResults.SRV);
+			dx11Context->PSSetShaderResources(SSAO_TEXTURE_SLOT0, 1, &m_finalResults.SRV);
 
 			CD3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, (float)m_size.x, (float)m_size.y);
 			CD3D11_RECT rect = CD3D11_RECT(m_fullResOutScissorRect.x, m_fullResOutScissorRect.y, m_fullResOutScissorRect.z, m_fullResOutScissorRect.w);
@@ -1319,23 +1273,6 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 
 	bool needsUpdate = false;
 
-	// We've got input normals? No need to keep ours then.
-	if (inputs->NormalSRV != NULL)
-	{
-		if (m_normals.SRV != NULL)
-		{
-			needsUpdate = true;
-			m_normals.Reset();
-		}
-	}
-	else
-	{
-		if (m_normals.SRV == NULL)
-		{
-			needsUpdate = true;
-		}
-	}
-
 	int width = inputs->ViewportWidth;
 	int height = inputs->ViewportHeight;
 
@@ -1383,9 +1320,6 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 	m_finalResults.ReCreateIfNeeded(m_device, m_halfSize, m_formats.AOResult, totalSizeInMB, 1, 4, false);
 	for (int i = 0; i < 4; i++)
 		m_finalResultsArrayViews[i].ReCreateArrayViewIfNeeded(m_device, m_finalResults, i);
-
-	if (inputs->NormalSRV == NULL)
-		m_normals.ReCreateIfNeeded(m_device, m_size, m_formats.Normals, totalSizeInMB, 1, 1, true);
 
 	totalSizeInMB /= 1024 * 1024;
 	//    m_debugInfo = vaStringTools::Format( "SSAO (approx. %.2fMB memory used) ", totalSizeInMB );
