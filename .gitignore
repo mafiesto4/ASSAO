@@ -262,3 +262,9 @@ __pycache__/
 *.pyc
 Projects/IntelSSAO/IntelSSAO.iobj
 Projects/IntelSSAO/IntelSSAO.ipdb
+*.exe
+Projects/ASSAO/cache/
+*.data
+Projects/ASSAO/log.txt
+*.exp
+*.lib
