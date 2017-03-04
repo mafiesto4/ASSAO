@@ -279,12 +279,6 @@
     <ClCompile Include="..\..\Modules\Core\vaUIDObject.cpp">
       <Filter>Core</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Modules\Rendering\Effects\vaASSAO.cpp">
-      <Filter>Rendering\Effects</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Modules\Rendering\DirectX\Effects\vaASSAODX11.cpp">
-      <Filter>Rendering\DirectX\Effects</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\Modules\Rendering\DirectX\Tools\DirectXTex-master\DDSTextureLoader\DDSTextureLoader.cpp">
       <Filter>Rendering\DirectX\Tools\DirectXTex-master\DDSTextureLoader</Filter>
     </ClCompile>
@@ -647,15 +641,6 @@
     <ClInclude Include="..\..\Modules\Core\vaUIDObject.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Modules\Rendering\Effects\vaASSAO.h">
-      <Filter>Rendering\Effects</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO_main_disk.h">
-      <Filter>Rendering\Media\Shaders</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO_types.h">
-      <Filter>Rendering\Media\Shaders</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Modules\Rendering\DirectX\Tools\DirectXTex-master\DDSTextureLoader\DDSTextureLoader.h">
       <Filter>Rendering\DirectX\Tools\DirectXTex-master\DDSTextureLoader</Filter>
     </ClInclude>
@@ -794,9 +779,6 @@
       <Filter>Rendering\Media\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="..\..\Modules\Rendering\Media\Shaders\vaLighting.hlsl">
-      <Filter>Rendering\Media\Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO.hlsl">
       <Filter>Rendering\Media\Shaders</Filter>
     </FxCompile>
     <FxCompile Include="..\..\Modules\Rendering\Media\Shaders\vaPostProcessBlur.hlsl">

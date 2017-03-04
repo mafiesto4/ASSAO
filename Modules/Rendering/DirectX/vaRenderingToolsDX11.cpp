@@ -36,7 +36,6 @@ using namespace VertexAsylum;
 void RegisterCanvasDX11();
 void RegisterSimpleShadowMapDX11(  );
 void RegisterSkyDX11( );
-void RegisterASSAODX11( );
 void RegisterSimpleParticleSystemDX11( );
 void RegisterRenderingGlobals( );
 void RegisterRenderMeshDX11( );
@@ -57,7 +56,6 @@ void vaRenderingCore::InitializePlatform( )
     RegisterCanvasDX11( );
     RegisterSimpleShadowMapDX11( );
     RegisterSkyDX11( );
-    RegisterASSAODX11( );
     RegisterSimpleParticleSystemDX11( );
     RegisterRenderingGlobals( );
     RegisterRenderMaterialDX11( );

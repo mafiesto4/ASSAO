@@ -99,8 +99,8 @@ struct ASSAO_Settings
     float       AdaptiveQualityLimit;               // [0.0, 1.0] (only for Quality Level 3)
     int         BlurPassCount;                      // [  0,   6] Number of edge-sensitive smart blur passes to apply. Quality 0 is an exception with only one 'dumb' blur pass used.
     float       Sharpness;                          // [0.0, 1.0] (How much to bleed over edges; 1: not at all, 0.5: half-half; 0.0: completely ignore edges)
-    float       TemporalSupersamplingAngleOffset;   // [0.0,  PI] Used to rotate sampling kernel; If using temporal AA / supersampling, suggested to rotate by ( (frame%3)/3.0*PI ) or similar. Kernel is already symmetrical, which is why we use PI and not 2*PI.
-    float       TemporalSupersamplingRadiusOffset;  // [0.0, 2.0] Used to scale sampling kernel; If using temporal AA / supersampling, suggested to scale by ( 1.0f + (((frame%3)-1.0)/3.0)*0.1 ) or similar.
+    float       Dummy0;
+    float       Dummy1;
     float       DetailShadowStrength;               // [0.0, 5.0] Used for high-res detail AO using neighboring depth pixels: adds a lot of detail but also reduces temporal stability (adds aliasing).
     bool        SkipHalfPixelsOnLowQualityLevel;    // [true/false] Use half of the pixels (checkerboard pattern) when in Low quality for "Lowest" setting
 
@@ -117,8 +117,6 @@ struct ASSAO_Settings
         QualityLevel                        = 2;
         BlurPassCount                       = 2;
         Sharpness                           = 0.98f;
-        TemporalSupersamplingAngleOffset    = 0.0f;
-        TemporalSupersamplingRadiusOffset   = 1.0f;
         DetailShadowStrength                = 0.5f;
         SkipHalfPixelsOnLowQualityLevel     = false;
     }

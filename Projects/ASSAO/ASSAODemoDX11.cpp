@@ -152,11 +152,9 @@ void SSAODemoDX11::DrawDebugOverlay( vaDrawContext & drawContext )
 
 
 void RegisterASSAOWrapperDX11( );
-void RegisterExternalSSAOWrapperDX11( );
 
 void RegisterSSAODemoDX11( )
 {
     VA_RENDERING_MODULE_REGISTER( ASSAODemo, SSAODemoDX11 );
     RegisterASSAOWrapperDX11( );
-    RegisterExternalSSAOWrapperDX11( );
 }

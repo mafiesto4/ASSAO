@@ -55,10 +55,8 @@ ASSAODemo::ASSAODemo( )
     m_lighting              = VA_RENDERING_MODULE_CREATE_UNIQUE( vaLighting );
     m_postProcess           = VA_RENDERING_MODULE_CREATE_UNIQUE( vaPostProcess );
     m_postProcessTonemap    = VA_RENDERING_MODULE_CREATE_UNIQUE( vaPostProcessTonemap );
-    
-    m_SSAOEffect_DevelopmentVersion = VA_RENDERING_MODULE_CREATE_UNIQUE( vaASSAO );
+
     m_SSAOEffect                    = VA_RENDERING_MODULE_CREATE_UNIQUE( ASSAOWrapper );
-    m_SSAOEffect_External           = VA_RENDERING_MODULE_CREATE_UNIQUE( ExternalSSAOWrapper );
 
     m_loadedSceneChoice = ASSAODemo::SceneSelectionType::MaxCount;
 
@@ -87,8 +85,6 @@ ASSAODemo::ASSAODemo( )
             }
         }
     }
-
-    m_triggerCompareDevNonDev = false;
 
     m_flythroughCameraEnabled = false;
 
@@ -298,17 +294,6 @@ void ASSAODemo::OnResized( int width, int height, bool windowed )
     m_camera->SetViewportSize( width, height );
 }
 
-void ASSAODemo::UpdateTextures( int width, int height )
-{
-    if( m_comparerReferenceTexture != nullptr && m_comparerReferenceTexture->GetSizeX() == width && m_comparerReferenceTexture->GetSizeY() == height )
-        return;
-
-    vaGBuffer::BufferFormats gbufferFormats = m_GBuffer->GetFormats();
-
-    m_comparerReferenceTexture              = shared_ptr<vaTexture>( vaTexture::Create2D( vaTextureFormat::R8G8B8A8_UNORM_SRGB, width, height, 1, 1, 1, vaTextureBindSupportFlags::ShaderResource | vaTextureBindSupportFlags::RenderTarget ) );
-    m_comparerCurrentTexture                = shared_ptr<vaTexture>( vaTexture::Create2D( vaTextureFormat::R8G8B8A8_UNORM_SRGB, width, height, 1, 1, 1, vaTextureBindSupportFlags::ShaderResource | vaTextureBindSupportFlags::RenderTarget ) );
-}
-
 void ASSAODemo::InsertAllToSceneMeshesList( vaAssetPack & pack, const vaMatrix4x4 & transform )
 {
     for( size_t i = 0; i < pack.Count(); i++ )
@@ -479,7 +464,6 @@ void ASSAODemo::OnTick( float deltaTime )
     if( m_settings.UseSimpleUI )
     {
         m_settings.CameraYFov               = 90.0f / 360.0f * VA_PIf;
-        m_settings.SSAOSelectedVersionIndex = 1;
     }
 }
 
@@ -555,19 +539,6 @@ void ASSAODemo::OnRender( )
 {
     m_frameIndex++;
 
-#if 0
-    // sample does not support TAA, but useful for testing (just enable VSYNC so that all frames are shown, and if your display doesn't have a great gray-to-gray response, you can get a nice preview of temporal supersampling)
-    if( m_SSAOEffect_DevelopmentVersion != nullptr )    
-    {
-        m_application->SetVsync( true );
-        const int temporalSuperSampleSteps = 2;
-        m_SSAOEffect_DevelopmentVersion->GetSettings().TemporalSupersamplingAngleOffset     = VA_PIf * ( (float)(m_frameIndex % temporalSuperSampleSteps) / (float)temporalSuperSampleSteps );
-        m_SSAOEffect_DevelopmentVersion->GetSettings().TemporalSupersamplingRadiusOffset    = 1.0f + 0.15f * ( (float)((m_frameIndex % temporalSuperSampleSteps) - 1.0f) / (float)temporalSuperSampleSteps );
-        m_SSAOEffect->GetSettings().TemporalSupersamplingAngleOffset     = VA_PIf * ( (float)(m_frameIndex % temporalSuperSampleSteps) / (float)temporalSuperSampleSteps );
-        m_SSAOEffect->GetSettings().TemporalSupersamplingRadiusOffset    = 1.0f + 0.15f * ( (float)((m_frameIndex % temporalSuperSampleSteps) - 1.0f) / (float)temporalSuperSampleSteps );
-    }
-#endif
-
     vaRenderDeviceContext & mainContext = *m_renderDevice->GetMainContext( );
 
 //// just for testing image comparison
@@ -606,7 +577,6 @@ void ASSAODemo::OnRender( )
 
 
     vaViewport mainViewportBackup   = m_renderDevice->GetMainContext( )->GetViewport();
-    vaViewport mainViewportExpanded = m_renderDevice->GetMainContext( )->GetViewport();
     vaViewport mainViewport         = m_renderDevice->GetMainContext( )->GetViewport();
     
     // current textures for sibenik are not good / complete
@@ -649,10 +619,6 @@ void ASSAODemo::OnRender( )
         scissorRectForSSAO.y   = m_expandedSceneBorder;
         scissorRectForSSAO.z   = mainViewport.Width  - m_expandedSceneBorder;
         scissorRectForSSAO.w   = mainViewport.Height - m_expandedSceneBorder;
-
-        mainViewportExpanded = mainViewport;
-
-        UpdateTextures( mainViewport.Width, mainViewport.Height );
     }
  
     // update GBuffer resources if needed
@@ -672,9 +638,6 @@ void ASSAODemo::OnRender( )
     // set main render target / depth
     mainContext.SetRenderTarget( mainColorRT, mainDepthRT, true );
 
-    vaMatrix4x4 viewProj = m_camera->GetViewMatrix( ) * m_camera->GetProjMatrix( );
-    
-    if( m_settings.UseDeferred )
     {
         VA_SCOPE_CPUGPU_TIMER( Deferred, mainContext );
         vaDrawContext drawContext( *m_camera.get( ), mainContext, *m_renderingGlobals.get( ), m_lighting.get( ) );
@@ -784,113 +747,21 @@ void ASSAODemo::OnRender( )
             m_renderingGlobals->SetAPIGlobals( drawContext );
 
             m_sky->Draw( drawContext );
-
-            if( !m_settings.UseDeferred )
-                vaRenderMeshManager::GetInstance().Draw( drawContext, m_meshDrawList );
         }
 
         // Apply SSAO
-        if( m_settings.EnableSSAO )
-        {
-            if( m_triggerCompareDevNonDev )
-            {
-                m_triggerCompareDevNonDev = false;
+		if (m_settings.EnableSSAO)
+		{
+			VA_SCOPE_CPUGPU_TIMER_DEFAULTSELECTED(ASSAO, mainContext);
 
-                m_comparerReferenceTexture->ClearRTV( mainContext, vaVector4( 1.0f, 1.0f, 1.0f, 1.0f ) );
-                mainContext.SetRenderTarget( m_comparerReferenceTexture, nullptr, true );
+			// set destination render target and no depth
+			mainContext.SetRenderTarget(mainColorRT, nullptr, true);
 
-                if( m_settings.UseDeferred )
-                    m_SSAOEffect_DevelopmentVersion->Draw( drawContext, drawContext.Camera.GetProjMatrix(), *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, m_GBuffer->GetNormalMap( ).get( ), scissorRectForSSAO );
-                else
-                    m_SSAOEffect_DevelopmentVersion->Draw( drawContext, drawContext.Camera.GetProjMatrix(), *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, nullptr, scissorRectForSSAO );
+			m_SSAOEffect->Draw(drawContext, *mainDepthRT.get(), !m_settings.DebugShowOpaqueSSAO, m_GBuffer->GetNormalMap().get(), scissorRectForSSAO);
 
-                m_comparerCurrentTexture->ClearRTV( mainContext, vaVector4( 1.0f, 1.0f, 1.0f, 1.0f ) );
-                mainContext.SetRenderTarget( m_comparerCurrentTexture, nullptr, true );
-
-                if( m_settings.UseDeferred )
-                    m_SSAOEffect->Draw( drawContext, *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, m_GBuffer->GetNormalMap( ).get( ), scissorRectForSSAO );
-                else
-                    m_SSAOEffect->Draw( drawContext, *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, nullptr, scissorRectForSSAO );
-
-                vaVector4 difference = m_postProcess->CompareImages( drawContext, *m_comparerReferenceTexture.get(), *m_comparerCurrentTexture.get() );
-
-                vaLog::GetInstance().Add( vaVector4( 1.0f, 0.0f, 0.0f, 1.0f ), "" );
-                vaLog::GetInstance().Add( vaVector4( 1.0f, 1.0f, 1.0f, 1.0f ), "IMGCOMPARE RESULTS:" );
-                if( difference.x == 0 )
-                    vaLog::GetInstance().Add( vaVector4( 0.6f, 1.0f, 0.6f, 1.0f ), "    NO difference (all pixels are identical).", difference.x );
-                else
-                    vaLog::GetInstance().Add( vaVector4( 1.0f, 0.6f, 0.6f, 1.0f ), "    MSE: %.7f, PSNR: %.2f", difference.x, difference.y );
-                vaLog::GetInstance().Add( vaVector4( 1.0f, 0.0f, 0.0f, 1.0f ), "" );
-
-                // restore main render target / depth
-                mainContext.SetRenderTarget( mainColorRT, mainDepthRT, true );
-            }
-
-            bool skipSSAO = false;
-            if( !skipSSAO )
-            {
-                if( m_settings.SSAOSelectedVersionIndex == 0 )
-                {
-                    VA_SCOPE_CPUGPU_TIMER_DEFAULTSELECTED( ASSAO_DevVersion, mainContext );
-
-                    // set destination render target and no depth
-                    mainContext.SetRenderTarget( mainColorRT, nullptr, true );
-
-#ifdef SSAO_ALLOW_INTERNAL_SHADER_DEBUGGING
-                    vaVector2i debugCursorPos = vaInputMouse::GetInstance( ).GetCursorClientPos() + vaVector2i( m_expandedSceneBorder, m_expandedSceneBorder );
-                    //VA_LOG( "DebugCursorPos: %d, %d", debugCursorPos.x, debugCursorPos.y );
-                    //debugCursorPos = vaVector2i( 728, 444 );
-                    m_SSAOEffect_DevelopmentVersion->SetDebugShowSamplesAtCursorPos( debugCursorPos );
-#endif
-
-                    if( m_settings.UseDeferred )
-                        m_SSAOEffect_DevelopmentVersion->Draw( drawContext, drawContext.Camera.GetProjMatrix(), *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, m_GBuffer->GetNormalMap( ).get( ), scissorRectForSSAO );
-                    else
-                        m_SSAOEffect_DevelopmentVersion->Draw( drawContext, drawContext.Camera.GetProjMatrix(), *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, nullptr, scissorRectForSSAO );
-
-#ifdef SSAO_ALLOW_INTERNAL_SHADER_DEBUGGING
-                    if( m_SSAOEffect_DevelopmentVersion->GetDebugShowSamplesAtCursorEnabled() )
-                    {
-                        drawContext.Globals.UpdateDebugOutputFloats( drawContext );
-                    }
-#endif
-
-                    // restore main render target / depth
-                    mainContext.SetRenderTarget( mainColorRT, mainDepthRT, true );
-                }
-                else if( m_settings.SSAOSelectedVersionIndex == 1 )
-                {
-                    VA_SCOPE_CPUGPU_TIMER_DEFAULTSELECTED( ASSAO, mainContext );
-
-                    // set destination render target and no depth
-                    mainContext.SetRenderTarget( mainColorRT, nullptr, true );
-
-                    if( m_settings.UseDeferred )
-                        m_SSAOEffect->Draw( drawContext, *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, m_GBuffer->GetNormalMap( ).get( ), scissorRectForSSAO );
-                    else
-                        m_SSAOEffect->Draw( drawContext, *mainDepthRT.get( ), !m_settings.DebugShowOpaqueSSAO, nullptr, scissorRectForSSAO );
-
-                    // restore main render target / depth
-                    mainContext.SetRenderTarget( mainColorRT, mainDepthRT, true );
-                }
-                else if( m_settings.SSAOSelectedVersionIndex == 2 )
-                {
-                    VA_SCOPE_CPUGPU_TIMER_DEFAULTSELECTED( ExternalSSAO, mainContext );
-
-                    // set destination render target and no depth
-                    mainContext.SetRenderTarget( mainColorRT, nullptr, true );
-
-                    if( m_settings.UseDeferred )
-                        m_SSAOEffect_External->Draw( drawContext, *mainDepthRT.get( ), m_GBuffer->GetNormalMap( ).get( ), !m_settings.DebugShowOpaqueSSAO, scissorRectForSSAO );
-                    else
-                        m_SSAOEffect_External->Draw( drawContext, *mainDepthRT.get( ), nullptr, !m_settings.DebugShowOpaqueSSAO, scissorRectForSSAO );
-
-                    // restore main render target / depth
-                    mainContext.SetRenderTarget( mainColorRT, mainDepthRT, true );
-                }
-                else { assert( false ); }
-            }
-        }
+			// restore main render target / depth
+			mainContext.SetRenderTarget(mainColorRT, mainDepthRT, true);
+		}
 
         // Debug wireframe
         if( m_settings.ShowWireframe )
@@ -919,8 +790,7 @@ void ASSAODemo::OnRender( )
 
     m_meshDrawList.Reset();
 
-    // GBuffer debug (but show only if deferred enabled)
-    if( m_settings.UseDeferred )
+    // GBuffer debug
     {
         VA_SCOPE_CPUGPU_TIMER( GbufferDebug, mainContext );
 
@@ -956,73 +826,6 @@ void ASSAODemo::OnRender( )
 
     {
         VA_SCOPE_CPU_TIMER( DebugCanvas2DAndStuff );
-
-#ifdef SSAO_ALLOW_INTERNAL_SHADER_DEBUGGING
-        if( m_settings.SSAOSelectedVersionIndex == 0 )
-        {
-            if( m_SSAOEffect_DevelopmentVersion->GetDebugShowSamplesAtCursorEnabled( ) )
-            {
-                const float * debugData = nullptr;
-                int debugDataCount = 0;
-                m_renderingGlobals->GetShaderDebugFloatOutput( debugData, debugDataCount );
-
-                const int * debugDataInt = (const int *)debugData;
-
-                vaVector2i cursorPos( debugDataInt[0], debugDataInt[1] );
-                cursorPos.x -= m_expandedSceneBorder;
-                cursorPos.y -= m_expandedSceneBorder;
-
-                m_renderDevice->GetCanvas2D( )->DrawLine( (float)cursorPos.x - 500.0f, (float)cursorPos.y, (float)cursorPos.x - 2.0f, (float)cursorPos.y, 0x60FF0000 );
-                m_renderDevice->GetCanvas2D( )->DrawLine( (float)cursorPos.x + 500.0f, (float)cursorPos.y, (float)cursorPos.x + 2.0f, (float)cursorPos.y, 0x6000FF00 );
-                m_renderDevice->GetCanvas2D( )->DrawLine( (float)cursorPos.x, (float)cursorPos.y - 500.0f, (float)cursorPos.x, (float)cursorPos.y - 2.0f, 0x60FF0000 );
-                m_renderDevice->GetCanvas2D( )->DrawLine( (float)cursorPos.x, (float)cursorPos.y + 500.0f, (float)cursorPos.x, (float)cursorPos.y + 2.0f, 0x6000FF00 );
-
-                int count = vaMath::Clamp( debugDataInt[2], 0, debugDataCount/2-4 );
-                const float * samples = (const float *)&debugData[4];
-
-                float ratioX = (float)mainViewportExpanded.Width  / (float)mainViewport.Width ;
-                float ratioY = (float)mainViewportExpanded.Height / (float)mainViewport.Height;
-
-                for( int i = 0; i < count; i++ )
-                {
-                    vaVector3 pt = *((vaVector3*)(&samples[i*5]));
-
-                    pt.x -= m_expandedSceneBorder / (float)mainViewportExpanded.Width;
-                    pt.y -= m_expandedSceneBorder / (float)mainViewportExpanded.Height;
-
-                    pt.x *= ratioX * (float)mainViewport.Width;
-                    pt.y *= ratioY * (float)mainViewport.Height;
-
-                    pt.x = floor( pt.x ) + 0.5f;
-                    pt.y = floor( pt.y ) + 0.5f;
-
-                    int mip = (int)( pt.z + 0.5f );
-                    uint32 color = 0xF0FF0000;
-                    if( mip == 1 )  color = 0xF000A010;
-                    if( mip == 2 )  color = 0xF00020FF;
-                    if( mip == 3 )  color = 0xF0000000;
-
-                    int rectSize = 3;
-                    int rectOff = rectSize / 2;
-
-                    m_renderDevice->GetCanvas2D( )->FillRectangle( pt.x - (float)rectOff, pt.y - (float)rectOff, (float)rectSize, (float)rectSize, color );
-
-                    rectSize = 7;
-                    rectOff = rectSize / 2;
-
-                    float sampleWeight  = samples[i*5+3];
-                    float sampleValue   = samples[i*5+4];
-
-                    float rectSizeY = rectSize * sampleWeight;
-                    m_renderDevice->GetCanvas2D( )->FillRectangle( pt.x - (float)rectOff + 2.0f + rectSize * 0.5f, pt.y - rectSizeY, (float)rectSize, (float)rectSizeY, vaVector4::ToBGRA( vaVector4( sampleValue, sampleValue, sampleValue, 1.0f ) ) );
-
-                    m_renderDevice->GetCanvas2D( )->DrawRectangle( pt.x - (float)rectOff + 2.0f + rectSize * 0.5f, pt.y - rectSizeY, (float)0.5f, (float)rectSizeY, 0x800000FF );
-
-                    m_renderDevice->GetCanvas2D()->DrawLine( pt.x, pt.y, pt.x + 1, pt.y + 1, 0xFF000000 );
-                }
-            }
-        }
-#endif
 
         if( m_displaySampleDisk.size() != 0 )
         {
@@ -1184,14 +987,6 @@ void ASSAODemo::OnRender( )
             string mainTitle = vaStringTools::SimpleNarrow( m_application->GetSettings( ).AppName );
             if( ImGui::Begin( mainTitle.c_str( ), 0, ImVec2( 0.f, 0.f ), 0.7f, 0 ) )
             {
-#if 0
-                if( ImGui::Button( "Test Poisson Disk Stuff" ) )
-                {
-                    RandomizeCurrentPoissonDisk();
-                    m_SSAOEffect_DevelopmentVersion->GetSettings().QualityLevel = 4;
-                    m_SSAOEffect_DevelopmentVersion->SetAutoPatternGenerateModeSettings( true, &m_currentPoissonDisk[0], (int)m_currentPoissonDisk.size() );
-                }
-#endif
                 if( ImGui::Button( "Switch to simple UI" ) )
                 {
                     m_settings.UseSimpleUI = true;
@@ -1203,9 +998,6 @@ void ASSAODemo::OnRender( )
                     //imguiStateStorage->SetInt( displayTypeID, displayTypeIndex );
                 }
                 m_settings.SceneChoice = (SceneSelectionType)(sceneSettingsIndex);
-
-                ImGui::Checkbox( "Use deferred", &m_settings.UseDeferred );
-                if( ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Use forward or deferred path; Forward, SSAO will generate its own viewspace screen normals from the depth buffer, and \nfor deferred it will use provided ones (although it can generate normals in deferred too).\nGenerated normals are slower and show scene tessellation but are generally less prone to aliasing artifacts." );
 
                 ImGui::Checkbox( "Disable texturing", &m_settings.DisableTexturing );
                 if( ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Just disables scene texturing, but keeps lighting (including normalmaps, if any)" );
@@ -1230,45 +1022,15 @@ void ASSAODemo::OnRender( )
                 // let the ImgUI controls have input priority
                 if( !ImGui::GetIO( ).WantCaptureKeyboard )
                 {
-                    if( !vaInputKeyboard::GetCurrent( )->IsKeyDownOrClicked( KK_LCONTROL ) && !vaInputKeyboard::GetCurrent( )->IsKeyDownOrClicked( KK_LSHIFT ) )
-                    {
-                        if( vaInputKeyboard::GetCurrent( )->IsKeyClicked( (vaKeyboardKeys)'1' ) )
-                            m_settings.SSAOSelectedVersionIndex = 0;
-                        if( vaInputKeyboard::GetCurrent( )->IsKeyClicked( (vaKeyboardKeys)'2' ) )
-                            m_settings.SSAOSelectedVersionIndex = 1;
-                        if( vaInputKeyboard::GetCurrent( )->IsKeyClicked( (vaKeyboardKeys)'3' ) )
-                            m_settings.SSAOSelectedVersionIndex = 2;
-                    }
                 }
-
-                if( ImGui::Combo( "SSAO Technique", &m_settings.SSAOSelectedVersionIndex, "ASSAO development version\0ASSAO\0External SSAO\0\0" ) )   // Combo using values packed in a single constant string (for really quick combo)
-                { }
 
                 ImGui::Separator();
 
                 ImGui::SetNextWindowCollapsed( true );
 
-                if( m_settings.SSAOSelectedVersionIndex == 0 )
-                {
-                    vaImguiHierarchyObject::DrawCollapsable( *m_SSAOEffect_DevelopmentVersion.get(), true, true );
-
-                    ImGui::Separator();
-
-                    if( ImGui::Button( "Compare dev vs non-dev versions at current settings" ) )
-                    {
-                        m_triggerCompareDevNonDev = true;
-                    }
-                }
-                else if( m_settings.SSAOSelectedVersionIndex == 1 )
-                    vaImguiHierarchyObject::DrawCollapsable( *m_SSAOEffect.get( ), true, true );
-                else if( m_settings.SSAOSelectedVersionIndex == 2 )
-                    vaImguiHierarchyObject::DrawCollapsable( *m_SSAOEffect_External.get( ), true, true );
-                else { assert( false ); }
-
                 ImGui::Separator( );
-
-                if( m_settings.UseDeferred )
-                    vaImguiHierarchyObject::DrawCollapsable( *m_GBuffer.get( ) );
+            	
+            	vaImguiHierarchyObject::DrawCollapsable( *m_GBuffer.get( ) );
             }
             ImGui::End( );
         }
@@ -1448,9 +1210,6 @@ void ASSAODemo::OnRender( )
                 }
 
                 {
-                    ImGuiToggleButton( "Deferred path", ImVec2( halfwidth, 0.0f ), m_settings.UseDeferred );
-                    if( mouseHover && ImGui::IsItemHovered( ) ) ImGui::SetTooltip( "Deferred path gets screen space normals as input,\nnon-deferred path generates normals from depth" );
-                    
                     ImGui::SameLine( halfwidth + framePadding * 3.0f );
 
                     ImGuiToggleButton( "Expand resolution", ImVec2( halfwidth, 0.0f ), m_settings.ExpandDrawResolution );

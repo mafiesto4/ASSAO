@@ -28,10 +28,7 @@
 
 #include "IntegratedExternals/vaImguiIntegration.h"
 
-#include "Rendering/Effects/vaASSAO.h"
-
 #include "ASSAOWrapper.h"
-#include "ExternalSSAOWrapper.h"
 
 #include "Rendering/vaAssetPack.h"
 
@@ -39,8 +36,6 @@ namespace VertexAsylum
 {
     class ASSAODemo : public vaRenderingModule, public std::enable_shared_from_this<ASSAODemo>
     {
-    public:
-
     public:
 
         enum class SceneSelectionType : int32
@@ -57,10 +52,10 @@ namespace VertexAsylum
         struct SSAODemoSettings
         {
             SceneSelectionType                      SceneChoice;
-            bool                                    UseDeferred;
+            bool                                    Dummy0;
             bool                                    ShowWireframe;
             bool                                    EnableSSAO;
-            int                                     SSAOSelectedVersionIndex;
+            int                                     Dummy1;
             bool                                    DebugShowOpaqueSSAO;
             bool                                    DisableTexturing;
             bool                                    ExpandDrawResolution;       // to handle SSAO artifacts around screen borders
@@ -72,8 +67,6 @@ namespace VertexAsylum
                 SceneChoice                 = SceneSelectionType::SponzaAndDragons;
                 ShowWireframe               = false;
                 EnableSSAO                  = true;
-                SSAOSelectedVersionIndex    = 1;
-                UseDeferred                 = true;
                 DebugShowOpaqueSSAO         = false;
                 DisableTexturing            = false;
                 ExpandDrawResolution        = false;
@@ -123,9 +116,7 @@ namespace VertexAsylum
         vector<shared_ptr<vaRenderMesh>>        m_sceneMeshes;
         vector<vaMatrix4x4>                     m_sceneMeshesTransforms;
 
-        shared_ptr<vaASSAO>                 	m_SSAOEffect_DevelopmentVersion;
         unique_ptr<ASSAOWrapper>            	m_SSAOEffect;
-        unique_ptr<ExternalSSAOWrapper>         m_SSAOEffect_External;
 
         SceneSelectionType                      m_loadedSceneChoice;
 
@@ -135,11 +126,6 @@ namespace VertexAsylum
         shared_ptr<vaAssetPack>                 m_assetsSibenik;
         shared_ptr<vaAssetPack>                 m_assetsSponza;
         shared_ptr<vaAssetPack>                 m_assetsLostEmpire;
-
-
-        bool                                    m_triggerCompareDevNonDev;
-        shared_ptr<vaTexture>                   m_comparerReferenceTexture;
-        shared_ptr<vaTexture>                   m_comparerCurrentTexture;
         
         vector<vaVector4>                       m_displaySampleDisk;
 
@@ -191,8 +177,6 @@ namespace VertexAsylum
 
         void                                    EnsureLoaded( vaAssetPack & pack );
         void                                    InsertAllToSceneMeshesList( vaAssetPack & pack, const vaMatrix4x4 & transform = vaMatrix4x4::Identity );
-
-        void                                    UpdateTextures( int width, int height );
 
     public:
 

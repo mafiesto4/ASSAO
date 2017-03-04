@@ -57,7 +57,6 @@
     <ClCompile Include="..\..\Modules\IntegratedExternals\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\..\Modules\IntegratedExternals\tinyxml2\tinyxml2.cpp" />
     <ClCompile Include="..\..\Modules\IntegratedExternals\vaImguiIntegration.cpp" />
-    <ClCompile Include="..\..\Modules\Rendering\DirectX\Effects\vaASSAODX11.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\DirectX\Effects\vaPostProcessBlurDX11.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\DirectX\Effects\vaPostProcessDX11.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\DirectX\Effects\vaPostProcessTonemapDX11.cpp" />
@@ -98,7 +97,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\..\Modules\Rendering\Effects\vaASSAO.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\Effects\vaPostProcess.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\Effects\vaPostProcessBlur.cpp" />
     <ClCompile Include="..\..\Modules\Rendering\Effects\vaPostProcessTonemap.cpp" />
@@ -216,21 +214,12 @@
     <ClInclude Include="..\..\Modules\Rendering\DirectX\vaRenderMaterialDX11.h" />
     <ClInclude Include="..\..\Modules\Rendering\DirectX\vaTextureDX11.h" />
     <ClInclude Include="..\..\Modules\Rendering\DirectX\vaTriangleMeshDX11.h" />
-    <ClInclude Include="..\..\Modules\Rendering\Effects\vaASSAO.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaPostProcess.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaPostProcessBlur.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaPostProcessTonemap.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaSimpleParticles.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaSimpleShadowMap.h" />
     <ClInclude Include="..\..\Modules\Rendering\Effects\vaSky.h" />
-    <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO_main_disk.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClInclude>
-    <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO_types.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClInclude>
     <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaShaderCore.h" />
     <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaSharedTypes.h" />
     <ClInclude Include="..\..\Modules\Rendering\Media\Shaders\vaSharedTypes_PostProcess.h" />
@@ -284,10 +273,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="..\..\Modules\Rendering\Media\Shaders\vaGBuffer.hlsl">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </FxCompile>
-    <FxCompile Include="..\..\Modules\Rendering\Media\Shaders\vaASSAO.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

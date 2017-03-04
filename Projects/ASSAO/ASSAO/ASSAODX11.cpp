@@ -1449,8 +1449,6 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
         consts.PassIndex                        = pass;
         consts.QuarterResPixelSize              = vaVector2( 1.0f / (float)m_quarterSize.x, 1.0f / (float)m_quarterSize.y );
 
-        float additionalAngleOffset = settings.TemporalSupersamplingAngleOffset;  // if using temporal supersampling approach (like "Progressive Rendering Using Multi-frame Sampling" from GPU Pro 7, etc.)
-        float additionalRadiusScale = settings.TemporalSupersamplingRadiusOffset; // if using temporal supersampling approach (like "Progressive Rendering Using Multi-frame Sampling" from GPU Pro 7, etc.)
         const int subPassCount = 5;
         for( int subPass = 0; subPass < subPassCount; subPass++ )
         {
@@ -1462,13 +1460,10 @@ void ASSAODX11::UpdateConstants( const ASSAO_Settings & settings, const ASSAO_In
 
             float ca, sa;
             float angle0 = ( (float)a + (float)b / (float)subPassCount ) * (3.1415926535897932384626433832795f) * 0.5f;
-            angle0 += additionalAngleOffset;
-
             ca = ::cosf( angle0 );
             sa = ::sinf( angle0 );
 
             float scale = 1.0f + (a-1.5f + (b - (subPassCount-1.0f) * 0.5f ) / (float)subPassCount ) * 0.07f;
-            scale *= additionalRadiusScale;
 
             consts.PatternRotScaleMatrices[subPass] = vaVector4( scale * ca, scale * -sa, -scale * sa, -scale * ca );
         }

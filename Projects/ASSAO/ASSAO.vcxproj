@@ -142,7 +142,6 @@
   <ItemGroup>
     <ClCompile Include="ASSAODemo.cpp" />
     <ClCompile Include="ASSAODemoDX11.cpp" />
-    <ClCompile Include="ExternalSSAOWrapperDX11.cpp" />
     <ClCompile Include="ASSAOWrapper.cpp" />
     <ClCompile Include="ASSAOWrapperDX11.cpp" />
     <ClCompile Include="ASSAO\ASSAODX11.cpp" />
@@ -150,7 +149,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ASSAODemo.h" />
-    <ClInclude Include="ExternalSSAOWrapper.h" />
     <ClInclude Include="ASSAOWrapper.h" />
     <ClInclude Include="ASSAO\ASSAO.h" />
   </ItemGroup>
