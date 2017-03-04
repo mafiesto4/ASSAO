@@ -16,6 +16,12 @@
 // 2016-09-07: filip.strugar@intel.com: first commit
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// http://developer.download.nvidia.com/devzone/devcenter/gamegraphics/files/OptimusRenderingPolicies.pdf
+// The following line is to favor the high performance NVIDIA GPU if there are multiple GPUs
+extern "C" { _declspec(dllexport) unsigned int NvOptimusEnablement = 0x00000001; }
+// ...and for AMD
+extern "C" { __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1; }
+
 #include "Rendering/DirectX/vaRenderDeviceDX11.h"
 
 #include "ASSAODemo.h"
