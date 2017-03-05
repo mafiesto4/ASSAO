@@ -349,7 +349,6 @@ private:
 
 	vaVector2i m_size;
 	vaVector2i m_halfSize;
-	vaVector2i m_quarterSize;
 	vaVector4i m_fullResOutScissorRect;
 	vaVector4i m_halfResOutScissorRect;
 
@@ -450,7 +449,6 @@ ASSAODX11::ASSAODX11(const ASSAO_CreateDescDX11* createDesc)
 
 	m_size = vaVector2i(0, 0);
 	m_halfSize = vaVector2i(0, 0);
-	m_quarterSize = vaVector2i(0, 0);
 	m_fullResOutScissorRect = vaVector4i(0, 0, 0, 0);
 	m_halfResOutScissorRect = vaVector4i(0, 0, 0, 0);
 
@@ -1251,8 +1249,6 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 	m_size.y = height;
 	m_halfSize.x = (width + 1) / 2;
 	m_halfSize.y = (height + 1) / 2;
-	m_quarterSize.x = (m_halfSize.x + 1) / 2;
-	m_quarterSize.y = (m_halfSize.y + 1) / 2;
 
 	vaVector4i prevScissorRect = m_fullResOutScissorRect;
 
@@ -1295,7 +1291,6 @@ void ASSAODX11::UpdateTextures(const ASSAO_InputsDX11* inputs)
 void ASSAODX11::UpdateConstants(const ASSAO_Settings& settings, const ASSAO_InputsDX11* inputs, int pass)
 {
 	ID3D11DeviceContext* dx11Context = inputs->DeviceContext;
-	bool generateNormals = inputs->NormalSRV == NULL;
 
 	// update constants
 	D3D11_MAPPED_SUBRESOURCE mappedResource;

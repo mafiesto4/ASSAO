@@ -262,26 +262,6 @@ void PSPrepareDepthsHalf(in float4 inPos : SV_POSITION, out float out0 : SV_Targ
 	out1 = ScreenSpaceToViewSpaceDepth(d);
 }
 
-float3 CalculateNormal(const float4 edgesLRTB, float3 pixCenterPos, float3 pixLPos, float3 pixRPos, float3 pixTPos, float3 pixBPos)
-{
-	// Get this pixel's viewspace normal
-	float4 acceptedNormals = float4(edgesLRTB.x * edgesLRTB.z, edgesLRTB.z * edgesLRTB.y, edgesLRTB.y * edgesLRTB.w, edgesLRTB.w * edgesLRTB.x);
-
-	pixLPos = normalize(pixLPos - pixCenterPos);
-	pixRPos = normalize(pixRPos - pixCenterPos);
-	pixTPos = normalize(pixTPos - pixCenterPos);
-	pixBPos = normalize(pixBPos - pixCenterPos);
-
-	float3 pixelNormal = float3(0, 0, -0.0005);
-	pixelNormal += (acceptedNormals.x) * cross(pixLPos, pixTPos);
-	pixelNormal += (acceptedNormals.y) * cross(pixTPos, pixRPos);
-	pixelNormal += (acceptedNormals.z) * cross(pixRPos, pixBPos);
-	pixelNormal += (acceptedNormals.w) * cross(pixBPos, pixLPos);
-	pixelNormal = normalize(pixelNormal);
-
-	return pixelNormal;
-}
-
 void PrepareDepthMip(const float4 inPos/*, const float2 inUV*/, int mipLevel, out float outD0, out float outD1, out float outD2, out float outD3)
 {
 	int2 baseCoords = int2(inPos.xy) * 2;
