@@ -119,21 +119,7 @@ struct ASSAO_Settings
 	float DetailShadowStrength; // [0.0, 5.0] Used for high-res detail AO using neighboring depth pixels: adds a lot of detail but also reduces temporal stability (adds aliasing).
 	bool SkipHalfPixelsOnLowQualityLevel; // [true/false] Use half of the pixels (checkerboard pattern) when in Low quality for "Lowest" setting
 
-	ASSAO_Settings()
-	{
-		Radius = 1.2f;
-		ShadowMultiplier = 1.0f;
-		ShadowPower = 1.50f;
-		ShadowClamp = 0.98f;
-		HorizonAngleThreshold = 0.06f;
-		FadeOutFrom = 50.0f;
-		FadeOutTo = 300.0f;
-		QualityLevel = 2;
-		BlurPassCount = 2;
-		Sharpness = 0.98f;
-		DetailShadowStrength = 0.5f;
-		SkipHalfPixelsOnLowQualityLevel = false;
-	}
+	ASSAO_Settings();
 };
 
 struct ASSAO_CreateDesc

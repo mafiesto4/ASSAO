@@ -50,7 +50,23 @@
 #define SSAO_TEXTURE_SLOT2                          2
 #define SSAO_TEXTURE_SLOT3                          3
 
-#define SSAO_DEPTH_MIP_LEVELS 2
+#define SSAO_DEPTH_MIP_LEVELS 4
+
+ASSAO_Settings::ASSAO_Settings()
+{
+	Radius = 1.2f;
+	ShadowMultiplier = 1.0f;
+	ShadowPower = 1.50f;
+	ShadowClamp = 0.98f;
+	HorizonAngleThreshold = 0.06f;
+	FadeOutFrom = 40.0f;
+	FadeOutTo = 60.0f;
+	QualityLevel = 2;
+	BlurPassCount = 2;
+	Sharpness = 0.98f;
+	DetailShadowStrength = 0.5f;
+	SkipHalfPixelsOnLowQualityLevel = false;
+}
 
 namespace
 {
@@ -151,7 +167,7 @@ namespace
 
 		vaVector2i PerPassFullResCoordOffset;
 		int PassIndex;
-		float Dummy0;
+		float EffectMaxDistance;
 
 		vaVector2 Viewport2xPixelSize;
 		vaVector2 Viewport2xPixelSize_x_025; // Viewport2xPixelSize * 0.25 (for fusing add+mul into mad)
@@ -1329,6 +1345,7 @@ void ASSAODX11::UpdateConstants(const ASSAO_Settings& settings, const ASSAO_Inpu
 		consts.EffectShadowStrength = Clamp(settings.ShadowMultiplier * 4.3f, 0.0f, 10.0f);
 		consts.EffectShadowPow = Clamp(settings.ShadowPower, 0.0f, 10.0f);
 		consts.EffectShadowClamp = Clamp(settings.ShadowClamp, 0.0f, 1.0f);
+		consts.EffectMaxDistance = settings.FadeOutTo;
 		consts.EffectFadeOutMul = -1.0f / (settings.FadeOutTo - settings.FadeOutFrom);
 		consts.EffectFadeOutAdd = settings.FadeOutFrom / (settings.FadeOutTo - settings.FadeOutFrom) + 1.0f;
 		consts.EffectHorizonAngleThreshold = Clamp(settings.HorizonAngleThreshold, 0.0f, 1.0f);

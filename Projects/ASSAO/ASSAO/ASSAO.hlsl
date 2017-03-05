@@ -48,7 +48,7 @@ struct ASSAOConstants
 
     int2 PerPassFullResCoordOffset;
 	int PassIndex;
-	float Dummy0;
+	float EffectMaxDistance;
 
     float2 Viewport2xPixelSize;
     float2 Viewport2xPixelSize_x_025; // Viewport2xPixelSize * 0.25 (for fusing add+mul into mad)
@@ -440,10 +440,20 @@ void GenerateSSAOShadowsInternal(out float outShadowTerm, out float4 outEdges, o
 	float pixZ, pixLZ, pixTZ, pixRZ, pixBZ;
 
 	float4 valuesUL = g_ViewspaceDepthSource.GatherRed(g_PointMirrorSampler, SVPosRounded * g_ASSAOConsts.HalfViewportPixelSize);
-	float4 valuesBR = g_ViewspaceDepthSource.GatherRed(g_PointMirrorSampler, SVPosRounded * g_ASSAOConsts.HalfViewportPixelSize, int2(1, 1));
 
 	// Get this pixel's viewspace depth
-	pixZ = valuesUL.y; //float pixZ = g_ViewspaceDepthSource.SampleLevel( g_PointMirrorSampler, normalizedScreenPos, 0.0 ).x; 
+	pixZ = valuesUL.y;
+
+	// Skip too far pixels
+	if (pixZ >= g_ASSAOConsts.EffectMaxDistance)
+	{
+		outShadowTerm = 1;
+		outEdges = 1;
+		outWeight = 0;
+		return;
+	}
+
+	float4 valuesBR = g_ViewspaceDepthSource.GatherRed(g_PointMirrorSampler, SVPosRounded * g_ASSAOConsts.HalfViewportPixelSize, int2(1, 1));
 
 	// Get left right top bottom neighbouring pixels for edge detection (gets compiled out on qualityLevel == 0)
 	pixLZ = valuesUL.x;
