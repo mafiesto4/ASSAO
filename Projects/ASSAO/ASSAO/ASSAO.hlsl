@@ -764,7 +764,7 @@ float2 PSNonSmartBlur( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0
 }
 
 // Edge-ignorant blur & apply (for the lowest quality level 0)
-float4 PSNonSmartApply( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
+float4 PSApply( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
 {
 	float a = g_FinalSSAO.SampleLevel(g_LinearClampSampler, float3(inUV.xy, 0), 0.0).x;
 	float b = g_FinalSSAO.SampleLevel(g_LinearClampSampler, float3(inUV.xy, 1), 0.0).x;
@@ -775,7 +775,7 @@ float4 PSNonSmartApply( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD
 }
 
 // Edge-ignorant blur & apply, skipping half pixels in checkerboard pattern (for the Lowest quality level 0 and Settings::SkipHalfPixelsOnLowQualityLevel == true )
-float4 PSNonSmartHalfApply( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
+float4 PSApplyHalf( in float4 inPos : SV_POSITION, in float2 inUV : TEXCOORD0 ) : SV_Target
 {
 	float a = g_FinalSSAO.SampleLevel(g_LinearClampSampler, float3(inUV.xy, 0), 0.0).x;
 	float d = g_FinalSSAO.SampleLevel(g_LinearClampSampler, float3(inUV.xy, 3), 0.0).x;
